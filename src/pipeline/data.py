@@ -36,7 +36,11 @@ import yaml
 
 from src import config
 
-FMP_BASE = "https://financialmodelingprep.com/api/v3"
+# Stable API per dip-engine canonical pattern (FOUNDING_CHARTER.md §A.1).
+# All requests: GET /stable/{endpoint}?symbol={SYMBOL}&apikey={KEY}
+# NOT the legacy /api/v3/{endpoint}/{SYMBOL}?apikey={KEY} pattern, which
+# returns 403 for Starter-plan keys.
+FMP_BASE = "https://financialmodelingprep.com/stable"
 FETCH_TIMEOUT_SEC = 30
 HISTORY_YEARS = 5
 
@@ -97,15 +101,37 @@ def fetch(ticker: str, refresh: bool = False) -> dict:
 # ---------- FMP HTTP ----------
 
 
-def _fetch_profile(ticker: str, api_key: str) -> dict:
-    url = f"{FMP_BASE}/profile/{ticker}"
-    resp = requests.get(url, params={"apikey": api_key}, timeout=FETCH_TIMEOUT_SEC)
+def _fmp_get(endpoint: str, ticker: str, api_key: str, **extra) -> object:
+    """Thin wrapper for FMP /stable/{endpoint}?symbol={TICKER}&...
+
+    Raises RuntimeError with a clear, actionable message on 402 (endpoint
+    not on your plan) and 403 (key invalid or endpoint deprecated). Other
+    non-200s raise via requests.HTTPError.
+    """
+    url = f"{FMP_BASE}/{endpoint}"
+    params = {"symbol": ticker, "apikey": api_key, **extra}
+    resp = requests.get(url, params=params, timeout=FETCH_TIMEOUT_SEC)
+    if resp.status_code == 402:
+        raise RuntimeError(
+            f"FMP /{endpoint} returned 402 — not available on your plan. "
+            "Charter §6 says: do NOT call this endpoint on Starter."
+        )
+    if resp.status_code == 403:
+        raise RuntimeError(
+            f"FMP /{endpoint} returned 403 — endpoint name may be wrong, "
+            f"or key invalid. Run `python tools/probe_fmp.py NVDA` to find "
+            f"the correct endpoint names empirically."
+        )
     resp.raise_for_status()
-    body = resp.json()
+    return resp.json()
+
+
+def _fetch_profile(ticker: str, api_key: str) -> dict:
+    body = _fmp_get("profile", ticker, api_key)
     if not body:
         raise RuntimeError(f"FMP returned empty profile for {ticker}")
-    p = body[0]
-    market_cap = p.get("mktCap")
+    p = body[0] if isinstance(body, list) else body
+    market_cap = p.get("marketCap") or p.get("mktCap")
     price = p.get("price")
     shares = p.get("sharesOutstanding")
     if not shares and market_cap and price:
@@ -125,17 +151,20 @@ def _fetch_profile(ticker: str, api_key: str) -> dict:
 
 def _fetch_prices(ticker: str, api_key: str) -> list[dict]:
     from_date = (date.today() - timedelta(days=int(HISTORY_YEARS * 365.25))).isoformat()
-    url = f"{FMP_BASE}/historical-price-full/{ticker}"
-    resp = requests.get(
-        url,
-        params={"apikey": api_key, "from": from_date},
-        timeout=FETCH_TIMEOUT_SEC,
-    )
-    resp.raise_for_status()
-    body = resp.json()
-    historical = body.get("historical", []) if isinstance(body, dict) else []
+    # Stable endpoint name based on FMP's current convention. If this
+    # returns 404, tools/probe_fmp.py will tell us the correct name.
+    body = _fmp_get("historical-price-eod/full", ticker, api_key, **{"from": from_date})
+    # Stable can return either a bare list or {"historical": [...]} —
+    # handle both shapes defensively.
+    if isinstance(body, list):
+        historical = body
+    elif isinstance(body, dict):
+        historical = body.get("historical") or body.get("data") or []
+    else:
+        historical = []
     if not historical:
         raise RuntimeError(f"FMP returned no historical prices for {ticker}")
+    # FMP returns newest-first; reverse to chronological.
     return [
         {
             "date": row["date"],
@@ -143,10 +172,10 @@ def _fetch_prices(ticker: str, api_key: str) -> list[dict]:
             "high": row.get("high"),
             "low": row.get("low"),
             "close": row.get("close"),
-            "adj_close": row.get("adjClose"),
+            "adj_close": row.get("adjClose") or row.get("close"),
             "volume": row.get("volume"),
         }
-        for row in reversed(historical)  # FMP returns newest-first; reverse to chronological
+        for row in reversed(historical)
     ]
 
 
