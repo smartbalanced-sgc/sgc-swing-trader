@@ -31,10 +31,16 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 
+import pandas_market_calendars as mcal
 import requests
 import yaml
 
 from src import config
+
+# NYSE calendar — same holiday set as NASDAQ for our purposes, and it
+# tracks ad-hoc closures (e.g. Hurricane Sandy, Jan 9 2025 for President
+# Carter). Loaded once at import time.
+NYSE_CAL = mcal.get_calendar("XNYS")
 
 # Stable API per dip-engine canonical pattern (FOUNDING_CHARTER.md §A.1).
 # All requests: GET /stable/{endpoint}?symbol={SYMBOL}&apikey={KEY}
@@ -182,17 +188,13 @@ def _fetch_prices(ticker: str, api_key: str) -> list[dict]:
 # ---------- sanity checks ----------
 
 
-def _count_weekdays(d1: date, d2: date) -> int:
-    """Count Mon-Fri days in [d1, d2] inclusive. Holidays not subtracted (v1)."""
-    if d1 > d2:
+def _trading_days_in_range(start: date, end: date) -> int:
+    """Count actual NYSE trading days in [start, end] inclusive. Returns 0
+    if start > end. Holidays and ad-hoc closures are correctly excluded."""
+    if start > end:
         return 0
-    n = 0
-    cur = d1
-    while cur <= d2:
-        if cur.weekday() < 5:
-            n += 1
-        cur += timedelta(days=1)
-    return n
+    sched = NYSE_CAL.schedule(start_date=start.isoformat(), end_date=end.isoformat())
+    return len(sched)
 
 
 def _run_sanity(prices: list[dict]) -> dict:
@@ -216,8 +218,8 @@ def _run_sanity(prices: list[dict]) -> dict:
 def _check_freshness(prices: list[dict]) -> dict:
     last = date.fromisoformat(prices[-1]["date"])
     today = date.today()
-    # Trading days strictly between last bar and today (exclusive both ends).
-    gap = _count_weekdays(last + timedelta(days=1), today - timedelta(days=1))
+    # Count trading days strictly between last bar and today.
+    gap = _trading_days_in_range(last + timedelta(days=1), today - timedelta(days=1))
     status = "fail" if gap > FRESHNESS_HARD_FAIL_DAYS else "ok"
     return {
         "status": status,
@@ -230,7 +232,7 @@ def _check_freshness(prices: list[dict]) -> dict:
 def _check_completeness(prices: list[dict]) -> dict:
     first = date.fromisoformat(prices[0]["date"])
     last = date.fromisoformat(prices[-1]["date"])
-    expected = _count_weekdays(first, last)
+    expected = _trading_days_in_range(first, last)
     actual = len(prices)
     missing = max(expected - actual, 0)
 
@@ -238,9 +240,14 @@ def _check_completeness(prices: list[dict]) -> dict:
     for i in range(1, len(prices)):
         a = date.fromisoformat(prices[i - 1]["date"])
         b = date.fromisoformat(prices[i]["date"])
-        if (b - a).days > 4:  # weekend = 3 days; > 4 means at least one missing trading day
+        between = _trading_days_in_range(a + timedelta(days=1), b - timedelta(days=1))
+        if between > 0:
             gaps.append(
-                {"from": a.isoformat(), "to": b.isoformat(), "calendar_days": (b - a).days}
+                {
+                    "from": a.isoformat(),
+                    "to": b.isoformat(),
+                    "missing_trading_days": between,
+                }
             )
 
     if expected > 0 and missing / expected > COMPLETENESS_HARD_FAIL_RATIO:
@@ -258,8 +265,8 @@ def _check_completeness(prices: list[dict]) -> dict:
         "gap_count": len(gaps),
         "gaps": gaps[:10],
         "message": (
-            f"{actual} bars, {missing} missing of {expected} expected weekdays, "
-            f"{len(gaps)} gap(s) > 1 trading day"
+            f"{actual} bars, {missing} missing of {expected} expected trading days, "
+            f"{len(gaps)} gap(s) > 0 trading days"
         ),
     }
 
