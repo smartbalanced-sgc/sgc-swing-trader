@@ -1,0 +1,38 @@
+# SGC Swing Trader — watchlist
+#
+# Single source of truth for ticker universe and per-user holding state.
+# Mutated via conversational Claude Code sessions per CLAUDE.md
+# "Position management — two-user protocol". Manual edits possible as a
+# fallback for emergencies.
+#
+# Schema (see docs/V1_SPEC.md §3 for full spec):
+#   TICKER:
+#     tier: A | B | C        # A mega-cap, B mid-cap growth, C small-cap catalyst
+#     notes: "free text"     # shared commentary
+#     holders:
+#       aidy:                # holder absent → user not tracking this ticker
+#         state: watching    # or "entered"
+#         # entry/target/stop/entered_date only present when state == entered
+#       jesse:
+#         state: watching
+
+NVDA:
+  tier: A
+  notes: "AI infra leader"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+ANET:
+  tier: B
+  notes: "AI networking, sector momentum"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+SNDK:
+  tier: C
+  notes: "Post-spinoff catalyst, regression test vs dip-engine reference"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}

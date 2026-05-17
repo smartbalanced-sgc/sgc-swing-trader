@@ -1,0 +1,38 @@
+# Nightly engine run — cron + run + commit + deploy.
+#
+# Currently set to manual-trigger only (workflow_dispatch). The scheduled
+# cron line is intentionally absent until the engine actually produces
+# output worth scheduling. See docs/V1_SPEC.md §9 — target schedule is
+# ~03:00 UTC nightly once the pipeline is real.
+
+name: nightly
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate watchlist
+        run: python tools/validate_watchlist.py
+
+      # The engine run, commit-snapshots, and deploy-pages steps will be
+      # added as the pipeline comes online. For now this workflow only
+      # proves the harness wiring + watchlist schema validation work.
