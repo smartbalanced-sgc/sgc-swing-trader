@@ -297,6 +297,42 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 6px 0; }
 .table-scroll > table { min-width: 100%; }
 
+/* ---------- Action panel — consolidated verdict + targets ---------- */
+.action-panel { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 14px 16px; margin: 14px 0; }
+.action-panel .pl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.action-panel .pl-head .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #064e3b; }
+.action-panel .pl-head .meta { font-size: 11px; color: #047857; }
+.action-horizon { padding: 10px 12px; background: white; border: 1px solid var(--border); border-radius: 5px; margin: 8px 0; }
+.action-horizon .ah-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); margin-bottom: 8px; }
+.action-group { padding: 8px 0; border-top: 1px dashed var(--border); }
+.action-group:first-of-type { border-top: 0; padding-top: 0; }
+.action-group + .action-group { margin-top: 4px; }
+.action-group .ag-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 6px; }
+.action-group .ag-headline .users { font-weight: 600; font-size: 13px; }
+.action-group .ag-headline .users.shared { color: var(--text-soft); font-weight: 500; font-style: italic; font-size: 12px; }
+.action-group .ag-reason { font-size: 12px; color: var(--text-soft); line-height: 1.55; margin-bottom: 6px; }
+.action-group .ag-targets { display: grid; grid-template-columns: max-content 1fr; gap: 3px 16px; font-size: 13px; }
+.action-group .ag-targets .lbl { color: var(--text-soft); font-family: -apple-system, sans-serif; }
+.action-group .ag-targets .val { font-family: ui-monospace, monospace; font-weight: 600; }
+.action-group .ag-targets .val .pct { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.action-group .ag-noaction { font-size: 12.5px; color: var(--text-soft); font-style: italic; padding: 4px 0; }
+.action-group .copy-paste { background: #1f2937; color: #f3f4f6; padding: 5px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; margin-top: 8px; display: inline-block; }
+.action-group .copy-paste::before { content: "$ "; color: #9ca3af; }
+
+/* ---------- collapsible subpanel pattern ---------- */
+details.subpanel { padding: 0; }
+details.subpanel > summary { padding: 12px 16px; cursor: pointer; list-style: none; }
+details.subpanel > summary::-webkit-details-marker { display: none; }
+details.subpanel > summary::before { content: "▸ "; color: var(--muted); }
+details.subpanel[open] > summary::before { content: "▾ "; }
+details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; }
+details.subpanel > .body { padding: 0 16px 14px; }
+
+/* ---------- engine read panel (always visible) ---------- */
+.engine-read-panel { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px 14px; margin: 14px 0; }
+.engine-read-panel .erp-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #78350f; margin-bottom: 6px; }
+.engine-read-panel .erp-body { font-size: 13px; line-height: 1.6; color: var(--text); }
+
 /* daily-path table (collapsed by default) */
 .daily-path { font-size: 12.5px; width: 100%; border-collapse: collapse; }
 .daily-path th, .daily-path td { padding: 3px 8px; border-bottom: 1px dotted var(--border); }
@@ -511,9 +547,8 @@ def _render_deployment(payload: dict) -> str:
                 if set(users) == set(all_tracking):
                     user_qual = ""
                 else:
-                    user_qual = f" ({', '.join(u.title() for u in users)} only)"
-                ticker_link = _ticker_link(ticker)
-                ticker_chunks.append(f"{ticker_link}{user_qual}")
+                    user_qual = f" ({', '.join(u.title() for u in users)})"
+                ticker_chunks.append(f"<span class='mono'>{html.escape(ticker)}</span>{user_qual}")
 
             rows.append(
                 f"<div class='row'>"
@@ -557,13 +592,78 @@ def _render_verdict_glossary() -> str:
 
 def _ticker_link(ticker: str) -> str:
     """Hyperlink a ticker symbol to its Trading 212 invest page,
-    opening in a new tab. Used in the deployment summary and in the
-    per-ticker card header."""
+    opening in a new tab. Used only in per-ticker card headers."""
     url = T212_URL_TEMPLATE.format(ticker=ticker)
     return (
         f"<a class='t212-link mono' href='{html.escape(url)}' "
         f"target='_blank' rel='noopener noreferrer'>{html.escape(ticker)}</a>"
     )
+
+
+# ---------- consolidated per-stock verdict grouping ----------
+
+
+def _consolidate_user_groups(per_horizon: dict, holders: dict) -> list[dict]:
+    """Group users with the same (verdict_label, user_state) signature
+    so the Action panel can show one row per group rather than
+    duplicating verdicts that apply to multiple users.
+
+    Returns a list of {users, state, breakdown, targets, entries} dicts.
+    `entries` maps each user in the group to their entry price (only
+    meaningful when state == 'entered'; None for watching).
+    """
+    groups: dict[tuple, dict] = {}
+    for user in config.USERS:
+        if user not in holders or user not in per_horizon:
+            continue
+        user_state = holders[user].get("state", "watching")
+        u = per_horizon[user]
+        breakdown = u["breakdown"]
+        targets = u.get("targets", {})
+        sig = (breakdown["verdict_label"], user_state)
+        if sig not in groups:
+            groups[sig] = {
+                "users": [],
+                "state": user_state,
+                "breakdown": breakdown,
+                "targets": targets,
+                "entries": {},
+            }
+        groups[sig]["users"].append(user)
+        groups[sig]["entries"][user] = holders[user].get("entry")
+    return list(groups.values())
+
+
+def _users_display(group: dict, holders: dict) -> tuple[str, bool]:
+    """Format the user-attribution label for an Action group.
+
+    Returns (label, is_implicit). is_implicit=True when the verdict
+    applies to all tracking users in watching state and the watchlist
+    universe is shared — caller may render attribution as empty/blank
+    in that case since the watching state is implicit (adding a ticker
+    to the watchlist makes it apply to both users by design).
+    """
+    state = group["state"]
+    users = group["users"]
+    all_tracking = [u for u in config.USERS if u in holders]
+    # Implicit case: all tracking users present, all in watching state.
+    # No attribution needed — empty string; caller renders nothing.
+    if state == "watching" and set(users) == set(all_tracking):
+        return ("", True)
+
+    # Explicit attribution. For entered, append the entry price per user
+    # (since each user's fill is personal).
+    if state == "entered":
+        parts = []
+        for u in users:
+            entry = group["entries"].get(u)
+            parts.append(f"{u.title()} (in @ ${entry:.2f})" if entry else f"{u.title()} (entered)")
+        return (" · ".join(parts), False)
+
+    # Partial split: someone watching while someone else entered the
+    # same ticker. Name the watching user(s) explicitly so the user
+    # knows which row applies to them.
+    return (" & ".join(u.title() for u in users) + " (watching)", False)
 
 
 # ---------- per-ticker card ----------
@@ -587,19 +687,49 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
             f"<span class='user-pill {state_class}'><span class='name'>{user.title()}</span>: {state}{html.escape(suffix)}</span>"
         )
 
+    # Card structure per Jesse's review:
+    # - Always visible (expanded): Price Levels, Action, Catalyst Engine
+    #   Read, Conviction Trajectory.
+    # - Everything else collapsed by default with one-line headline in
+    #   the <summary> so the user can scan without expanding.
+    thesis_text = (snap.get("thesis") or {}).get("text", "")
+    thesis_summary = (thesis_text[:120] + "…") if len(thesis_text) > 120 else thesis_text
+
     sections = [
-        _render_thesis(snap),
+        # 1. Price levels (expanded — the most actionable panel)
         _render_price_levels(snap, watchlist_entry),
-        _render_conviction(snap, watchlist_entry),
-        _render_catalyst(snap),
-        _render_regime(snap),
-        _render_volatility(snap),
-        _render_fair_value(snap),
-        _render_cross_check(snap),
-        _render_classifier(snap),
+        # 2. Action — consolidated verdict + targets (expanded)
+        _render_action(snap, watchlist_entry),
+        # 3. Catalyst engine read (expanded — qualitative recommendation)
+        _render_engine_read(snap),
+        # 4. Conviction trajectory (expanded — sparkline)
         _render_trajectory(snap),
-        _render_data(snap),
-        _render_daily_path(snap),
+        # Thesis collapsed (the multi-sentence summary)
+        _collapsible(
+            "Thesis — full plain-English summary",
+            html.escape(thesis_summary) if thesis_summary else "click to read",
+            _render_thesis(snap),
+        ),
+        # Conviction breakdown — 3-layer detail collapsed by default
+        _collapsible(
+            "Conviction breakdown — 3-layer detail",
+            _conviction_headline(snap),
+            _render_conviction(snap, watchlist_entry),
+        ),
+        # Catalyst data (date, options, reactions, news) collapsed
+        _collapsible(
+            "Catalyst data — event date, options-implied, history, news",
+            _catalyst_headline(snap),
+            _render_catalyst(snap),
+        ),
+        # Technical / informational panels — all collapsed by default
+        _collapsible("Regime — direction & volatility character", _regime_headline(snap), _render_regime(snap)),
+        _collapsible("Volatility forecast — how much the price typically swings", _volatility_headline(snap), _render_volatility(snap)),
+        _collapsible("Fair value — what the stock is fundamentally worth", _fair_value_headline(snap), _render_fair_value(snap)),
+        _collapsible("Math cross-check — do two independent forecasts agree?", _cross_check_headline(snap), _render_cross_check(snap)),
+        _collapsible("Tier sanity-check — does the math match the label?", _classifier_headline(snap), _render_classifier(snap)),
+        _collapsible("Data & sanity (step 1)", _data_headline(snap), _render_data(snap)),
+        _collapsible("Daily expected path — median MC scenario", "click to expand", _render_daily_path(snap)),
     ]
 
     return f"""
@@ -658,28 +788,8 @@ def _render_price_levels(snap: dict, watchlist_entry: dict) -> str:
         dip_pct = (dip.get("price", 0) - current) / current * 100 if current else 0
         rally_pct = (rally.get("price", 0) - current) / current * 100 if current else 0
 
-        # Per-user target/stop summary lines.
-        per_user_lines = []
-        conviction_block = (snap.get("conviction") or {}).get("horizons", {}).get(h, {})
-        for user in config.USERS:
-            if user not in holders:
-                continue
-            state = holders[user].get("state", "watching")
-            targets = (conviction_block.get(user) or {}).get("targets") or {}
-            stop = targets.get("stop")
-            target = targets.get("target")
-            entry = holders[user].get("entry") if state == "entered" else None
-            pieces = [f"<strong>{user.title()}</strong> ({state})"]
-            if state == "entered" and entry:
-                pieces.append(f"in @ ${entry:.2f}")
-            if target:
-                t_pct = (target - current) / current * 100 if current else 0
-                pieces.append(f"target ${target:.2f} ({t_pct:+.1f}%)")
-            if stop:
-                s_pct = (stop - current) / current * 100 if current else 0
-                pieces.append(f"stop ${stop:.2f} ({s_pct:+.1f}%)")
-            per_user_lines.append(f"<div class='pl-user-row'>{' · '.join(pieces)}</div>")
-
+        # Per-user targets moved to the Action panel — Price Levels
+        # now shows only the math-derived zones.
         dip_html = "" if not dip else f"""
 <div class='pl-zone dip'>
   <span class='pl-icon'>⬇</span>
@@ -701,7 +811,6 @@ def _render_price_levels(snap: dict, watchlist_entry: dict) -> str:
   <div class='pl-hlabel'>{h}-day horizon</div>
   {dip_html}
   {rally_html}
-  {"".join(per_user_lines)}
 </div>
 """)
 
@@ -723,6 +832,131 @@ def _render_price_levels(snap: dict, watchlist_entry: dict) -> str:
     Dip-entry and rally-sell prices are derived from {config.MC_PATHS:,} Monte Carlo paths over each horizon: the level at which <strong>{int(pct*100)}%</strong> of simulated futures touch on the way down (dip) or up (rally). Date ranges show the ±{config.THRESHOLDS.price_levels.date_range_half_width_sessions}-session window around the median touch date.
   </div>
   {"".join(horizon_blocks)}
+</div>
+"""
+
+
+def _render_action(snap: dict, watchlist_entry: dict) -> str:
+    """Consolidated verdict + targets panel (expanded by default).
+
+    Groups users by (verdict, state) so identical verdicts collapse to
+    one row per group. The full 3-layer breakdown lives in a separate
+    (collapsed) conviction panel — this one is the at-a-glance "what
+    should I do" answer.
+    """
+    block = snap.get("conviction")
+    if not block or block.get("status") == "pending":
+        return _pending_panel("Action — what to do today", "Will appear once steps 2–8 of the pipeline are wired up enough to produce a verdict. Will show the verdict (ENTER/WAIT/HOLD/SKIP/TRIM/EXIT) + targets per horizon, consolidated across users where they agree.")
+
+    holders = watchlist_entry.get("holders") or {}
+    horizons = block.get("horizons") or {}
+
+    current_price = ((snap.get("price_levels") or {}).get("current_price")) or 0.0
+
+    horizon_blocks = []
+    for h in config.HORIZONS:
+        per_horizon = horizons.get(h)
+        if not per_horizon:
+            continue
+        groups = _consolidate_user_groups(per_horizon, holders)
+        group_blocks = []
+        for g in groups:
+            verdict = g["breakdown"]["verdict_label"]
+            reason = g["breakdown"]["verdict_reason"]
+            targets = g["targets"]
+            user_label, implicit = _users_display(g, holders)
+            user_cls = "users shared" if implicit else "users"
+
+            # Per-state targets / next-action rendering
+            entry_field = targets.get("entry")
+            target = targets.get("target")
+            stop = targets.get("stop")
+            copy_paste = targets.get("copy_paste") or ""
+
+            target_rows = []
+            if g["state"] == "watching" and verdict in ("ENTER", "WAIT"):
+                if entry_field:
+                    target_rows.append(f"<div class='lbl'>Suggested entry</div><div class='val'>{html.escape(str(entry_field))}</div>")
+                if target and current_price:
+                    pct = (target - current_price) / current_price * 100
+                    target_rows.append(f"<div class='lbl'>Target</div><div class='val'>${target:.2f} <span class='pct'>({pct:+.1f}%)</span></div>")
+                if stop and current_price:
+                    pct = (stop - current_price) / current_price * 100
+                    target_rows.append(f"<div class='lbl'>Stop</div><div class='val'>${stop:.2f} <span class='pct'>({pct:+.1f}%)</span></div>")
+            elif g["state"] == "entered":
+                if target and current_price:
+                    pct = (target - current_price) / current_price * 100
+                    target_rows.append(f"<div class='lbl'>Target (from current)</div><div class='val'>${target:.2f} <span class='pct'>({pct:+.1f}%)</span></div>")
+                if stop and current_price:
+                    pct = (stop - current_price) / current_price * 100
+                    target_rows.append(f"<div class='lbl'>Stop (from current)</div><div class='val'>${stop:.2f} <span class='pct'>({pct:+.1f}%)</span></div>")
+
+            if target_rows:
+                targets_html = f"<div class='ag-targets'>{''.join(target_rows)}</div>"
+            else:
+                # No actionable targets (SKIP, or TRIM/EXIT signals with
+                # no engine-derived levels yet). Show a brief plain
+                # explanation instead.
+                if verdict == "SKIP":
+                    note = "No action — wait for conditions to change before re-evaluating."
+                elif verdict in ("TRIM", "EXIT"):
+                    note = "Engine signal is to reduce/close. Confirm with the conviction breakdown below before acting."
+                elif verdict == "HOLD":
+                    note = "Stay in. No re-entry / re-trim suggested."
+                else:
+                    note = "—"
+                targets_html = f"<div class='ag-noaction'>{html.escape(note)}</div>"
+
+            cp_html = ""
+            if copy_paste and verdict in ("ENTER", "EXIT", "TRIM"):
+                cp_html = f"<div class='copy-paste'>{html.escape(copy_paste)}</div>"
+
+            group_blocks.append(f"""
+<div class='action-group'>
+  <div class='ag-headline'>
+    <span class='verdict verdict-{html.escape(verdict)}'>{html.escape(verdict)}</span>
+    <span class='{user_cls}'>{html.escape(user_label)}</span>
+  </div>
+  <div class='ag-reason'>{html.escape(reason)}</div>
+  {targets_html}
+  {cp_html}
+</div>
+""")
+
+        horizon_blocks.append(f"""
+<div class='action-horizon'>
+  <div class='ah-label'>{h}-day horizon</div>
+  {"".join(group_blocks)}
+</div>
+""")
+
+    return f"""
+<div class='action-panel'>
+  <div class='pl-head'>
+    <span class='title'>Action — what to do today</span>
+    <span class='meta'>verdicts consolidated where they apply to all of you</span>
+  </div>
+  {"".join(horizon_blocks)}
+</div>
+"""
+
+
+def _render_engine_read(snap: dict) -> str:
+    """The engine-read recommendation paragraph (always visible).
+
+    Extracted from the catalyst panel so the qualitative recommendation
+    is visible without expanding the full catalyst details below.
+    """
+    cat = snap.get("catalyst")
+    if not cat or cat.get("status") == "pending":
+        return ""
+    rec = cat.get("engine_recommendation") or ""
+    if not rec:
+        return ""
+    return f"""
+<div class='engine-read-panel'>
+  <div class='erp-head'>Engine read — qualitative recommendation</div>
+  <div class='erp-body'>{html.escape(rec)}</div>
 </div>
 """
 
@@ -755,15 +989,7 @@ def _render_conviction(snap: dict, watchlist_entry: dict) -> str:
             continue
         horizon_blocks.append(_render_one_horizon(h, per_horizon, holders))
 
-    return f"""
-<div class='subpanel'>
-  <div class='head'>
-    <span class='title'>Conviction (3-layer breakdown)</span>
-    <span class='meta'>per horizon × per user — math anchored in <a href='#' style='color: var(--accent); text-decoration: none;'>spec §5.1</a></span>
-  </div>
-  {"".join(horizon_blocks)}
-</div>
-"""
+    return "".join(horizon_blocks)
 
 
 def _render_one_horizon(horizon_days: int, per_horizon: dict, holders: dict) -> str:
@@ -958,20 +1184,15 @@ def _render_catalyst(snap: dict) -> str:
             f"<ul class='news-bullets'>{''.join(f'<li>{html.escape(n)}</li>' for n in news)}</ul>"
         )
 
-    rec_html = f"<div class='engine-rec'><strong>Engine read:</strong> {html.escape(rec)}</div>" if rec else ""
-
+    # The engine-read paragraph is rendered as its own always-visible
+    # block via _render_engine_read; catalyst panel here is just the
+    # supporting data (event date, options-implied, historical
+    # reactions, news headlines, analyst revisions).
     return f"""
-<div class='subpanel'>
-  <div class='head'>
-    <span class='title'>Catalyst narrative</span>
-    <span class='meta'>step 3 — catalyst detection</span>
-  </div>
-  <div class='catalyst-block'>
-    {"".join(rows)}
-    {reactions_html}
-    {news_html}
-    {rec_html}
-  </div>
+<div class='catalyst-block'>
+  {"".join(rows)}
+  {reactions_html}
+  {news_html}
 </div>
 """
 
@@ -1009,27 +1230,24 @@ def _render_regime(snap: dict) -> str:
         means = "Drift fed to MC reflects regime direction. Watch for confidence ≥ 70% if state is downtrend/crisis — that threshold triggers the Layer-3 ENTER veto."
 
     return f"""
-<div class='subpanel'>
-  <div class='head'><span class='title'>Regime — what the price action says</span><span class='meta'>step 2 — HMM</span></div>
-  <div class='what-it-is'>
-    <span class='label'>What this is</span>
-    A statistical model classifies the past ~60 sessions into one of five regimes
-    (uptrend-quiet, uptrend-noisy, downtrend, sideways, crisis). The current regime + its
-    confidence drive (1) the daily drift parameter inside Monte Carlo (Layer 1 of conviction)
-    and (2) the Layer-3 ENTER veto when state is downtrend/crisis with ≥70% confidence.
-  </div>
-  <div class='kv-row {veto_class}'>
-    <span class='k'>Current state</span>
-    <span class='v'>{html.escape(state)} — <span style='color: var(--text-soft); font-family: inherit;'>{html.escape(state_meaning)}</span></span>
-    <span class='v-right'>{conf*100:.0f}% confidence{' — VETO active' if veto_active else ''}</span>
-  </div>
-  <div class='kv-row'><span class='k'>Days in this regime</span><span class='v'>{duration} sessions</span><span class='v-right' style='color: var(--muted);'>longer = more durable</span></div>
-  <div class='kv-row'><span class='k'>Implied annual drift (fed to MC)</span><span class='v'>{drift*100:+.1f}% per year</span><span class='v-right' style='color: var(--muted);'>this number directly shifts P(target)</span></div>
-  {f"<div style='font-size: 12.5px; color: var(--text-soft); margin-top: 8px; line-height: 1.55;'>{html.escape(narrative)}</div>" if narrative else ""}
-  <div class='what-it-means'>
-    <span class='label'>What this means for you</span>
-    {html.escape(means)}
-  </div>
+<div class='what-it-is'>
+  <span class='label'>What this is</span>
+  A statistical model classifies the past ~60 sessions into one of five regimes
+  (uptrend-quiet, uptrend-noisy, downtrend, sideways, crisis). The current regime + its
+  confidence drive (1) the daily drift parameter inside Monte Carlo (Layer 1 of conviction)
+  and (2) the Layer-3 ENTER veto when state is downtrend/crisis with ≥70% confidence.
+</div>
+<div class='kv-row {veto_class}'>
+  <span class='k'>Current state</span>
+  <span class='v'>{html.escape(state)} — <span style='color: var(--text-soft); font-family: inherit;'>{html.escape(state_meaning)}</span></span>
+  <span class='v-right'>{conf*100:.0f}% confidence{' — VETO active' if veto_active else ''}</span>
+</div>
+<div class='kv-row'><span class='k'>Days in this regime</span><span class='v'>{duration} sessions</span><span class='v-right' style='color: var(--muted);'>longer = more durable</span></div>
+<div class='kv-row'><span class='k'>Implied annual drift (fed to MC)</span><span class='v'>{drift*100:+.1f}% per year</span><span class='v-right' style='color: var(--muted);'>this number directly shifts P(target)</span></div>
+{f"<div style='font-size: 12.5px; color: var(--text-soft); margin-top: 8px; line-height: 1.55;'>{html.escape(narrative)}</div>" if narrative else ""}
+<div class='what-it-means'>
+  <span class='label'>What this means for you</span>
+  {html.escape(means)}
 </div>
 """
 
@@ -1053,23 +1271,20 @@ def _render_volatility(snap: dict) -> str:
         forecast_meaning = "Vol forecast roughly flat — set stop/target distances proportional to current realized vol."
 
     return f"""
-<div class='subpanel'>
-  <div class='head'><span class='title'>Volatility — how much the price typically swings</span><span class='meta'>step 4 — GARCH(1,1)</span></div>
-  <div class='what-it-is'>
-    <span class='label'>What this is</span>
-    Realized volatility = the standard deviation of daily returns, scaled to an annual figure
-    (multiply by √252). A 30% annualized vol means the stock's typical year-over-year price
-    swing is about 30% of its own price. GARCH(1,1) is a model that captures how today's
-    vol depends on recent vol (vol tends to cluster — calm follows calm, wild follows wild).
-  </div>
-  <div class='kv-row'><span class='k'>Current realized vol (60d trailing)</span><span class='v'>{current*100:.1f}% annualized</span><span class='v-right' style='color: var(--muted);'>≈ {daily_swing_pct:.1f}% typical daily move</span></div>
-  <div class='kv-row'><span class='k'>Forecast end-of-30d</span><span class='v'>{forecast_30*100:.1f}% annualized</span><span></span></div>
-  <div class='kv-row'><span class='k'>Forecast end-of-60d</span><span class='v'>{forecast_60*100:.1f}% annualized</span><span></span></div>
-  <div class='kv-row'><span class='k'>Confidence band (set by tier)</span><span class='v'>{html.escape(band_width)}</span><span class='v-right' style='color: var(--muted);'>Tier A tight, B moderate, C wide</span></div>
-  <div class='what-it-means'>
-    <span class='label'>What this means for you</span>
-    {html.escape(forecast_meaning)} Higher vol also means the dip-entry and rally-sell zones in the price-levels panel will be further from current price — the model expects more movement in both directions, so the actionable levels spread out.
-  </div>
+<div class='what-it-is'>
+  <span class='label'>What this is</span>
+  Realized volatility = the standard deviation of daily returns, scaled to an annual figure
+  (multiply by √252). A 30% annualized vol means the stock's typical year-over-year price
+  swing is about 30% of its own price. GARCH(1,1) is a model that captures how today's
+  vol depends on recent vol (vol tends to cluster — calm follows calm, wild follows wild).
+</div>
+<div class='kv-row'><span class='k'>Current realized vol (60d trailing)</span><span class='v'>{current*100:.1f}% annualized</span><span class='v-right' style='color: var(--muted);'>≈ {daily_swing_pct:.1f}% typical daily move</span></div>
+<div class='kv-row'><span class='k'>Forecast end-of-30d</span><span class='v'>{forecast_30*100:.1f}% annualized</span><span></span></div>
+<div class='kv-row'><span class='k'>Forecast end-of-60d</span><span class='v'>{forecast_60*100:.1f}% annualized</span><span></span></div>
+<div class='kv-row'><span class='k'>Confidence band (set by tier)</span><span class='v'>{html.escape(band_width)}</span><span class='v-right' style='color: var(--muted);'>Tier A tight, B moderate, C wide</span></div>
+<div class='what-it-means'>
+  <span class='label'>What this means for you</span>
+  {html.escape(forecast_meaning)} Higher vol also means the dip-entry and rally-sell zones in the price-levels panel will be further from current price — the model expects more movement in both directions, so the actionable levels spread out.
 </div>
 """
 
@@ -1106,23 +1321,20 @@ def _render_fair_value(snap: dict) -> str:
         sigma_class = "fail"
 
     return f"""
-<div class='subpanel'>
-  <div class='head'><span class='title'>Fair value — what the stock is fundamentally worth</span><span class='meta'>step 5</span></div>
-  <div class='what-it-is'>
-    <span class='label'>What this is</span>
-    Multi-method triangulation of fundamental value: forward P/E vs sector peers, discounted-cash-flow
-    where input quality is sufficient, and recent comparable transactions. The output is a RANGE (not a
-    point estimate) reflecting genuine uncertainty in valuation. The σ figure measures how far today's
-    market price sits above (+) or below (−) the range mean, in units of the range's own standard
-    deviation: ±1σ means "roughly within the normal valuation range"; ±2σ means "meaningfully outside it."
-  </div>
-  <div class='kv-row'><span class='k'>Fair-value range (low — mean — high)</span><span class='v'>${low:.2f} — ${mean:.2f} — ${high:.2f}</span><span></span></div>
-  <div class='kv-row'><span class='k'>Current market price</span><span class='v'>${current:.2f}</span><span class='v-right'><span class='pill pill-{sigma_class}'>{sigmas:+.2f}σ vs FV mean</span></span></div>
-  <div class='kv-row'><span class='k'>Methods contributing</span><span class='v' style='font-family: inherit; font-size: 12px;'>{", ".join(html.escape(m) for m in methods)}</span><span></span></div>
-  <div class='what-it-means'>
-    <span class='label'>What this means for you</span>
-    {html.escape(sigma_meaning)}
-  </div>
+<div class='what-it-is'>
+  <span class='label'>What this is</span>
+  Multi-method triangulation of fundamental value: forward P/E vs sector peers, discounted-cash-flow
+  where input quality is sufficient, and recent comparable transactions. The output is a RANGE (not a
+  point estimate) reflecting genuine uncertainty in valuation. The σ figure measures how far today's
+  market price sits above (+) or below (−) the range mean, in units of the range's own standard
+  deviation: ±1σ means "roughly within the normal valuation range"; ±2σ means "meaningfully outside it."
+</div>
+<div class='kv-row'><span class='k'>Fair-value range (low — mean — high)</span><span class='v'>${low:.2f} — ${mean:.2f} — ${high:.2f}</span><span></span></div>
+<div class='kv-row'><span class='k'>Current market price</span><span class='v'>${current:.2f}</span><span class='v-right'><span class='pill pill-{sigma_class}'>{sigmas:+.2f}σ vs FV mean</span></span></div>
+<div class='kv-row'><span class='k'>Methods contributing</span><span class='v' style='font-family: inherit; font-size: 12px;'>{", ".join(html.escape(m) for m in methods)}</span><span></span></div>
+<div class='what-it-means'>
+  <span class='label'>What this means for you</span>
+  {html.escape(sigma_meaning)}
 </div>
 """
 
@@ -1181,27 +1393,24 @@ def _render_cross_check(snap: dict) -> str:
             )
 
     return f"""
-<div class='subpanel'>
-  <div class='head'><span class='title'>Math cross-check — do two independent forecasts agree?</span><span class='meta'>step 7 — MC vs Fokker-Planck PDE</span></div>
-  <div class='what-it-is'>
-    <span class='label'>What this is</span>
-    We compute the same forecast (P(target hit first), P(stop hit first), expected value) two
-    completely different ways: random simulation (50,000 Monte Carlo paths) AND solving a
-    deterministic differential equation. The methods make different mathematical assumptions —
-    when they agree, the answer is robust; when they diverge, at least one is being stretched
-    by unusual conditions, so we don't know which to trust. Conviction gets a Layer-2 haircut
-    when they disagree by more than {config.THRESHOLDS.cross_check.p_target_agreement_tolerance_pp:.1f}pp.
-  </div>
-  <div class='what-it-means' style='background: #{"f0fdf4" if all_agree else "fffbeb"}; border-left-color: var(--{headline_class});'>
-    <span class='label' style='color: var(--{headline_class});'>Headline</span>
-    {html.escape(headline_text)}
-  </div>
-  <div class='table-scroll' style='margin-top: 10px;'>
-    <table class='agreement-table'>
-      <thead><tr><th>Horizon</th><th>Metric</th><th style='text-align:right;'>MC</th><th style='text-align:right;'>PDE</th><th style='text-align:right;'>Δ</th><th style='text-align:right;'>Agreement</th></tr></thead>
-      <tbody>{"".join(rows)}</tbody>
-    </table>
-  </div>
+<div class='what-it-is'>
+  <span class='label'>What this is</span>
+  We compute the same forecast (P(target hit first), P(stop hit first), expected value) two
+  completely different ways: random simulation (50,000 Monte Carlo paths) AND solving a
+  deterministic differential equation. The methods make different mathematical assumptions —
+  when they agree, the answer is robust; when they diverge, at least one is being stretched
+  by unusual conditions, so we don't know which to trust. Conviction gets a Layer-2 haircut
+  when they disagree by more than {config.THRESHOLDS.cross_check.p_target_agreement_tolerance_pp:.1f}pp.
+</div>
+<div class='what-it-means' style='background: #{"f0fdf4" if all_agree else "fffbeb"}; border-left-color: var(--{headline_class});'>
+  <span class='label' style='color: var(--{headline_class});'>Headline</span>
+  {html.escape(headline_text)}
+</div>
+<div class='table-scroll' style='margin-top: 10px;'>
+  <table class='agreement-table'>
+    <thead><tr><th>Horizon</th><th>Metric</th><th style='text-align:right;'>MC</th><th style='text-align:right;'>PDE</th><th style='text-align:right;'>Δ</th><th style='text-align:right;'>Agreement</th></tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
 </div>
 """
 
@@ -1267,29 +1476,26 @@ def _render_classifier(snap: dict) -> str:
             f"<span class='tier-badge tier-{html.escape(tier)}'>Tier {html.escape(tier)}</span></td></tr>"
         )
     return f"""
-<div class='subpanel'>
-  <div class='head'><span class='title'>Tier sanity-check — does the math match the label?</span><span class='meta'>§4.2 — advisory in v1.0</span></div>
-  <div class='what-it-is'>
-    <span class='label'>What this is</span>
-    Each ticker has a tier label you set in the watchlist — <strong>A</strong> mega-cap mature (think
-    NVDA-like), <strong>B</strong> mid-cap growth (think AMAT-like), <strong>C</strong> small-cap
-    fat-tailed (think IONQ-like). The pipeline uses your label to pick which statistical assumptions
-    to run. This panel independently measures the stock's actual recent behavior — vol, vol-of-vol,
-    liquidity, history — and tells you whether the label you set still matches reality. If the math
-    has migrated tiers (e.g. a B-anchored name now behaving like C), the conviction confidence gets
-    a Layer-2 haircut.
-  </div>
-  <div class='kv-row'><span class='k'>Watchlist anchor → measured</span><span class='v'>Tier {html.escape(anchor)} → Tier {html.escape(measured)}</span><span class='v-right'>{direction_pill}</span></div>
-  <div class='table-scroll' style='margin-top: 8px;'>
-    <table class='classifier-table'>
-      <thead><tr><th>Property</th><th style='text-align:right;'>Value</th><th>Score</th></tr></thead>
-      <tbody>{"".join(rows)}</tbody>
-    </table>
-  </div>
-  <div class='what-it-means'>
-    <span class='label'>What this means for you</span>
-    {html.escape(headline)} {html.escape(means)}
-  </div>
+<div class='what-it-is'>
+  <span class='label'>What this is</span>
+  Each ticker has a tier label you set in the watchlist — <strong>A</strong> mega-cap mature (think
+  NVDA-like), <strong>B</strong> mid-cap growth (think AMAT-like), <strong>C</strong> small-cap
+  fat-tailed (think IONQ-like). The pipeline uses your label to pick which statistical assumptions
+  to run. This panel independently measures the stock's actual recent behavior — vol, vol-of-vol,
+  liquidity, history — and tells you whether the label you set still matches reality. If the math
+  has migrated tiers (e.g. a B-anchored name now behaving like C), the conviction confidence gets
+  a Layer-2 haircut.
+</div>
+<div class='kv-row'><span class='k'>Watchlist anchor → measured</span><span class='v'>Tier {html.escape(anchor)} → Tier {html.escape(measured)}</span><span class='v-right'>{direction_pill}</span></div>
+<div class='table-scroll' style='margin-top: 8px;'>
+  <table class='classifier-table'>
+    <thead><tr><th>Property</th><th style='text-align:right;'>Value</th><th>Score</th></tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+</div>
+<div class='what-it-means'>
+  <span class='label'>What this means for you</span>
+  {html.escape(headline)} {html.escape(means)}
 </div>
 """
 
@@ -1375,17 +1581,7 @@ def _render_data(snap: dict) -> str:
             f"<span class='v-right'><span class='pill {cls}'>{html.escape(c.get('status', '?'))}</span></span>"
             f"</div>"
         )
-    return f"""
-<details class='subpanel'>
-  <summary style='cursor: pointer; list-style: none;'>
-    <div class='head'>
-      <span class='title'>Data &amp; sanity (step 1) — {bar_count} bars · {html.escape(profile.get('industry') or '?')}</span>
-      <span class='meta'><span class='pill pill-{html.escape(status)}'>{html.escape(status)}</span></span>
-    </div>
-  </summary>
-  <div style='margin-top: 8px;'>{"".join(rows)}</div>
-</details>
-"""
+    return "".join(rows)
 
 
 def _render_daily_path(snap: dict) -> str:
@@ -1404,19 +1600,11 @@ def _render_daily_path(snap: dict) -> str:
             f"<td class='{zone_cls}'>{zone_label}</td></tr>"
         )
     return f"""
-<details class='subpanel'>
-  <summary style='cursor: pointer; list-style: none;'>
-    <div class='head'>
-      <span class='title'>Daily expected path — click to expand</span>
-      <span class='meta'>step 6 — median MC scenario</span>
-    </div>
-  </summary>
-  <table class='daily-path' style='margin-top: 8px;'>
-    <thead><tr><th class='num'>Day</th><th>Date</th><th style='text-align:right;'>Median price</th><th>Zone</th></tr></thead>
-    <tbody>{"".join(rows)}</tbody>
-  </table>
-  <div style='font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5;'>This is one typical scenario out of {config.MC_PATHS:,} simulated paths. Reality could be shallower, deeper, or different days. The dip/rally zones highlight the ±7-day window around the median's lowest and highest points; the headline conviction-engine targets remain primary.</div>
-</details>
+<table class='daily-path' style='margin-top: 8px;'>
+  <thead><tr><th class='num'>Day</th><th>Date</th><th style='text-align:right;'>Median price</th><th>Zone</th></tr></thead>
+  <tbody>{"".join(rows)}</tbody>
+</table>
+<div style='font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5;'>This is one typical scenario out of {config.MC_PATHS:,} simulated paths. Reality could be shallower, deeper, or different days. The dip/rally zones highlight the ±7-day window around the median's lowest and highest points; the headline conviction-engine targets remain primary.</div>
 """
 
 
@@ -1437,6 +1625,113 @@ def _render_footer(payload: dict) -> str:
 # ---------- low-level helpers ----------
 
 
+# ---------- headline summaries (visible in collapsed <summary>) ----------
+
+
+def _conviction_headline(snap: dict) -> str:
+    block = snap.get("conviction")
+    if not block or block.get("status") != "ok":
+        return "pending"
+    # Take the first horizon's first user to summarize.
+    horizons = block.get("horizons") or {}
+    if not horizons:
+        return "—"
+    first_h = sorted(horizons.keys())[0]
+    first_user = next(iter(horizons[first_h].keys()), None)
+    if first_user is None:
+        return "—"
+    br = horizons[first_h][first_user]["breakdown"]
+    return f"final score {br['final_score']:.2f} (edge {br['layer1_edge']['score']:.2f} × confidence {br['layer2_confidence']['multiplier']:.2f})"
+
+
+def _catalyst_headline(snap: dict) -> str:
+    cat = snap.get("catalyst")
+    if not cat or cat.get("status") != "ok":
+        return "pending"
+    next_event = cat.get("next_event")
+    distance = cat.get("distance_sessions")
+    implied = cat.get("options_implied_move_pct")
+    if next_event and distance is not None:
+        s = f"{html.escape(next_event['type'])} in {distance} sessions"
+        if implied is not None:
+            s += f" · ±{implied*100:.1f}% implied"
+        return s
+    return "no scheduled catalyst"
+
+
+def _regime_headline(snap: dict) -> str:
+    r = snap.get("regime")
+    if not r or r.get("status") != "ok":
+        return "pending"
+    state = r.get("state", "?")
+    conf = r.get("confidence", 0)
+    veto = " · VETO active" if r.get("veto_active") else ""
+    return f"{html.escape(state)} · {conf*100:.0f}% confidence{veto}"
+
+
+def _volatility_headline(snap: dict) -> str:
+    v = snap.get("volatility")
+    if not v or v.get("status") != "ok":
+        return "pending"
+    cur = v.get("current_realized_pct", 0)
+    fc30 = v.get("forecast_30d_pct", 0)
+    direction = "↓ falling" if fc30 < cur * 0.97 else "↑ rising" if fc30 > cur * 1.03 else "→ flat"
+    return f"{cur*100:.0f}% realized · 30d forecast {fc30*100:.0f}% ({direction})"
+
+
+def _fair_value_headline(snap: dict) -> str:
+    fv = snap.get("fair_value")
+    if not fv or fv.get("status") != "ok":
+        return "pending"
+    mean = fv.get("range_mean", 0)
+    current = fv.get("current_price", 0)
+    sigmas = fv.get("premium_sigmas", 0)
+    return f"${current:.2f} vs FV mean ${mean:.2f} ({sigmas:+.2f}σ)"
+
+
+def _cross_check_headline(snap: dict) -> str:
+    cc = snap.get("cross_check")
+    if not cc or cc.get("status") != "ok":
+        return "pending"
+    horizons = cc.get("horizons", {})
+    total = 0
+    agree = 0
+    for h in config.HORIZONS:
+        d = horizons.get(h) or horizons.get(str(h))
+        if not d:
+            continue
+        for metric in ("p_target", "p_stop", "ev"):
+            total += 1
+            if d.get(f"agree_{metric}", False):
+                agree += 1
+    if total == 0:
+        return "—"
+    if agree == total:
+        return f"all {total} comparisons agree — no haircut"
+    return f"{total - agree} of {total} outside tolerance — haircut applied"
+
+
+def _classifier_headline(snap: dict) -> str:
+    c = snap.get("tier_classifier")
+    if not c or c.get("status") != "ok":
+        return "pending"
+    comparison = c.get("comparison") or {}
+    anchor = comparison.get("anchor", "?")
+    measured = comparison.get("measured", "?")
+    direction = comparison.get("direction", "?")
+    icon = "✓" if direction == "match" else "⚠"
+    return f"{icon} watchlist {anchor} → measured {measured} ({direction})"
+
+
+def _data_headline(snap: dict) -> str:
+    d = snap.get("data")
+    if not d or d.get("status") != "ok":
+        return "pending"
+    bars = d.get("bar_count", "?")
+    sanity = (d.get("sanity") or {}).get("overall", "?")
+    return f"{bars} bars · sanity {sanity}"
+
+
 def _pending_panel(title: str, description: str) -> str:
     return f"""
 <div class='subpanel pending'>
@@ -1446,6 +1741,29 @@ def _pending_panel(title: str, description: str) -> str:
   </div>
   <div style='font-size: 12.5px; color: var(--muted); font-style: italic;'>{description}</div>
 </div>
+"""
+
+
+def _collapsible(title: str, headline: str, body: str, open: bool = False) -> str:
+    """Wrap a panel body in a <details>-based collapsible subpanel.
+
+    The headline appears in the always-visible summary so the user can
+    scan key info without expanding the panel. Set open=True for panels
+    that should be expanded by default.
+    """
+    open_attr = " open" if open else ""
+    return f"""
+<details class='subpanel'{open_attr}>
+  <summary>
+    <div class='head'>
+      <span class='title'>{title}</span>
+      <span class='meta'>{headline}</span>
+    </div>
+  </summary>
+  <div class='body'>
+    {body}
+  </div>
+</details>
 """
 
 
