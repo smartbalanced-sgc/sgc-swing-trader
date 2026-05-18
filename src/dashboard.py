@@ -248,6 +248,55 @@ section.ticker-card > .card-body { padding: 4px 22px 22px; }
 .sparkline-block .trend.unstable { color: var(--warn); }
 .sparkline-block .trend.stable { color: var(--text-soft); }
 
+/* ---------- ticker hyperlink (T212) ---------- */
+a.t212-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); }
+a.t212-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
+
+/* ---------- verdict glossary ---------- */
+.glossary-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 12.5px; }
+.glossary-grid dt { font-weight: 600; }
+.glossary-grid dd { margin: 0; color: var(--text-soft); }
+
+/* ---------- price-levels panel ---------- */
+.price-levels { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px 16px; margin: 14px 0; }
+.price-levels .pl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.price-levels .pl-head .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #0f172a; }
+.price-levels .pl-head .current { font-family: ui-monospace, monospace; font-size: 13px; }
+.price-levels .pl-head .current strong { font-size: 16px; }
+.price-levels .pl-explainer { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.55; }
+.price-levels .pl-horizon { padding: 10px 12px; background: white; border: 1px solid var(--border); border-radius: 5px; margin: 8px 0; }
+.price-levels .pl-horizon .pl-hlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); margin-bottom: 8px; }
+.price-levels .pl-zone { display: grid; grid-template-columns: 24px minmax(120px, max-content) 1fr max-content; gap: 6px 12px; align-items: baseline; padding: 5px 0; border-top: 1px dotted var(--border); font-family: ui-monospace, monospace; font-size: 12.5px; }
+.price-levels .pl-zone:first-of-type { border-top: 0; }
+.price-levels .pl-zone .pl-icon { font-family: ui-monospace, monospace; font-size: 13px; }
+.price-levels .pl-zone .pl-name { font-family: -apple-system, sans-serif; color: var(--text-soft); }
+.price-levels .pl-zone .pl-detail { color: var(--muted); font-family: -apple-system, sans-serif; font-size: 12px; }
+.price-levels .pl-zone .pl-value { font-weight: 600; text-align: right; }
+.price-levels .pl-zone.dip   .pl-icon { color: var(--fail); }
+.price-levels .pl-zone.rally .pl-icon { color: var(--ok); }
+.price-levels .pl-zone.stop  .pl-icon { color: var(--warn); }
+.price-levels .pl-zone.target .pl-icon { color: var(--accent); }
+.price-levels .pl-user-row { font-size: 11.5px; color: var(--muted); padding-left: 36px; margin-top: 4px; line-height: 1.5; }
+
+/* ---------- plain-English explainer blocks (top of technical panels) ---------- */
+.what-it-is { background: #fafaf9; border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-soft); line-height: 1.55; border-radius: 0 4px 4px 0; }
+.what-it-is .label { font-weight: 600; color: var(--text); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.what-it-means { background: #f0f9ff; border-left: 3px solid var(--accent); padding: 8px 12px; margin-top: 10px; font-size: 12.5px; color: var(--text); line-height: 1.55; border-radius: 0 4px 4px 0; }
+.what-it-means .label { font-weight: 600; color: var(--accent); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+
+/* ---------- catalyst narrative — uniform typography ---------- */
+.catalyst-block { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.55; }
+.catalyst-block .cat-row { display: grid; grid-template-columns: 24px minmax(160px, max-content) 1fr; gap: 6px 14px; padding: 4px 0; align-items: baseline; }
+.catalyst-block .cat-row .cat-icon { color: var(--accent); font-weight: 600; font-size: 12px; }
+.catalyst-block .cat-row .cat-label { color: var(--text-soft); }
+.catalyst-block .cat-row .cat-value { color: var(--text); }
+.catalyst-block .cat-section-title { font-size: 12px; color: var(--text-soft); margin: 10px 0 4px; font-weight: 500; }
+
+/* ---------- mobile-friendly table wrapper ---------- */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 6px 0; }
+.table-scroll > table { min-width: 100%; }
+
 /* daily-path table (collapsed by default) */
 .daily-path { font-size: 12.5px; width: 100%; border-collapse: collapse; }
 .daily-path th, .daily-path td { padding: 3px 8px; border-bottom: 1px dotted var(--border); }
@@ -272,6 +321,26 @@ footer.band p { margin: 4px 0; }
 """
 
 
+# ---------- shared constants ----------
+
+
+# Trading 212 invest URL for ticker symbols on the dashboard. Open in a
+# new tab. (NOTE: T212 URL conventions for non-US tickers will need
+# tweaking when we add European names — at that point we'll branch on
+# exchange/suffix.)
+T212_URL_TEMPLATE = "https://www.trading212.com/trading-instruments/invest/{ticker}"
+
+
+VERDICT_GLOSSARY = [
+    ("ENTER", "Open a new position. Conviction is above the ENTER threshold AND no Layer-3 veto fires on this horizon. The price-levels panel above each card shows the suggested entry zone."),
+    ("WAIT",  "Don't enter today, but don't dismiss the ticker either. Either (a) conviction is between the WAIT floor and the ENTER threshold, or (b) a Layer-3 veto (catalyst inside horizon, downtrend regime) is temporarily blocking ENTER. Re-evaluates each night."),
+    ("SKIP",  "Don't enter — conviction is below the WAIT floor OR a hard veto (e.g. fair-value extreme, Tier-C illiquidity) fires. Re-evaluates each night but the bar to flip back to actionable is higher than for WAIT."),
+    ("HOLD",  "Keep the position. Conviction is above the WAIT floor and the original thesis is intact. Default state for entered positions on a quiet, in-range day."),
+    ("TRIM",  "Take partial profits — sell some of the position but not all. Triggered when fair-value premium goes ≥2σ above the engine's fair-value mean OR the regime flips from positive to negative on an entered position. Reduce exposure, don't pre-commit to a full exit."),
+    ("EXIT",  "Close the entire position. Triggered when conviction falls below the WAIT floor (thesis fully weakened), the stop level is breached, OR the engine deems the trade structurally broken (regime collapse, fair-value catastrophe)."),
+]
+
+
 # ---------- top-level render ----------
 
 
@@ -284,6 +353,7 @@ def render(payload: dict) -> str:
     parts.append(_render_data_quality(payload))
     parts.append(_render_backtest(payload))
     parts.append(_render_deployment(payload))
+    parts.append(_render_verdict_glossary())
 
     parts.append("<h2 class='section'>Per-ticker deep reports</h2>")
     for ticker in payload.get("watchlist", {}).keys():
@@ -399,38 +469,101 @@ def _render_backtest(payload: dict) -> str:
 
 
 def _render_deployment(payload: dict) -> str:
+    """Group verdicts by label and horizon. When all tracking users agree
+    on a (ticker, horizon, verdict) tuple, don't qualify by user. Only
+    show per-user qualifier when verdicts diverge across users on the
+    same ticker+horizon (e.g. AMAT where Aidy is watching and Jesse is
+    entered)."""
     tickers = payload.get("tickers", {})
-    by_user_label: dict[tuple, list[str]] = {}
+    watchlist = payload.get("watchlist", {})
+
+    # Build:   {(label, horizon_days): [(ticker, [users_with_this_verdict])]}
+    grouped: dict[tuple, dict[str, list[str]]] = {}
+
     for ticker, snap in tickers.items():
-        verdicts = snap.get("verdict") or {}
-        for user, v in verdicts.items():
-            if not isinstance(v, dict) or v.get("status") == "pending":
-                continue
-            horizon_label = v.get("primary_label") or "—"
-            by_user_label.setdefault((user, horizon_label), []).append(ticker)
+        per_horizon = ((snap.get("conviction") or {}).get("horizons")) or {}
+        if not per_horizon:
+            continue
+        holders = (watchlist.get(ticker) or {}).get("holders") or {}
+        for horizon_days, users_block in per_horizon.items():
+            for user in config.USERS:
+                if user not in holders or user not in users_block:
+                    continue
+                label = users_block[user]["breakdown"]["verdict_label"]
+                key = (label, int(horizon_days))
+                grouped.setdefault(key, {}).setdefault(ticker, []).append(user)
+
+    label_order = ("ENTER", "HOLD", "WAIT", "TRIM", "SKIP", "EXIT", "—")
+    horizon_order = sorted(set(h for (_, h) in grouped.keys()))
 
     rows: list[str] = []
-    for user in config.USERS:
-        for label in ("ENTER", "HOLD", "WAIT", "TRIM", "SKIP", "EXIT"):
-            tickers_for = by_user_label.get((user, label), [])
-            if not tickers_for:
+    for horizon_days in horizon_order:
+        for label in label_order:
+            entries = grouped.get((label, horizon_days))
+            if not entries:
                 continue
+            ticker_chunks = []
+            for ticker, users in entries.items():
+                holders = (watchlist.get(ticker) or {}).get("holders") or {}
+                all_tracking = [u for u in config.USERS if u in holders]
+                # If every tracking user has this same (label, horizon),
+                # don't qualify — applies to both.
+                if set(users) == set(all_tracking):
+                    user_qual = ""
+                else:
+                    user_qual = f" ({', '.join(u.title() for u in users)} only)"
+                ticker_link = _ticker_link(ticker)
+                ticker_chunks.append(f"{ticker_link}{user_qual}")
+
             rows.append(
                 f"<div class='row'>"
-                f"<span class='label'><span class='verdict verdict-{html.escape(label)}'>{html.escape(label)}</span></span>"
-                f"<span class='count'>{user.title()} ({len(tickers_for)}):</span>"
-                f"<span class='ticker-list'>{', '.join(tickers_for)}</span>"
+                f"<span class='label'><span class='verdict verdict-{html.escape(label)}'>{html.escape(label)} {horizon_days}d</span></span>"
+                f"<span class='count'>({len(entries)})</span>"
+                f"<span class='ticker-list'>{' · '.join(ticker_chunks)}</span>"
                 f"</div>"
             )
+
     if not rows:
         rows.append("<div class='row'><span class='label'>—</span><span class='count'>No actionable verdicts this run.</span></div>")
 
     return f"""
 <div class='deployment'>
-  <h3>Today's deployment ({payload.get('run_date', '?')})</h3>
+  <h3>Today's deployment ({html.escape(payload.get('run_date', '?'))})</h3>
   {"".join(rows)}
+  <div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); line-height: 1.5;'>
+    Verdicts unqualified by user apply to both Aidy and Jesse (they share the watchlist universe).
+    A per-user qualifier appears only when Aidy and Jesse have diverged — typically because one has bought into a position the other is still watching.
+    Definitions of each label are in the glossary below.
+  </div>
 </div>
 """
+
+
+def _render_verdict_glossary() -> str:
+    items = "".join(
+        f"<dt><span class='verdict verdict-{html.escape(label)}'>{html.escape(label)}</span></dt>"
+        f"<dd>{html.escape(definition)}</dd>"
+        for label, definition in VERDICT_GLOSSARY
+    )
+    return f"""
+<details class='info-block'>
+  <summary>What do <span class='verdict verdict-ENTER'>ENTER</span> / <span class='verdict verdict-WAIT'>WAIT</span> / <span class='verdict verdict-HOLD'>HOLD</span> / <span class='verdict verdict-TRIM'>TRIM</span> / <span class='verdict verdict-SKIP'>SKIP</span> / <span class='verdict verdict-EXIT'>EXIT</span> mean?</summary>
+  <div class='body'>
+    <dl class='glossary-grid'>{items}</dl>
+  </div>
+</details>
+"""
+
+
+def _ticker_link(ticker: str) -> str:
+    """Hyperlink a ticker symbol to its Trading 212 invest page,
+    opening in a new tab. Used in the deployment summary and in the
+    per-ticker card header."""
+    url = T212_URL_TEMPLATE.format(ticker=ticker)
+    return (
+        f"<a class='t212-link mono' href='{html.escape(url)}' "
+        f"target='_blank' rel='noopener noreferrer'>{html.escape(ticker)}</a>"
+    )
 
 
 # ---------- per-ticker card ----------
@@ -456,6 +589,7 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
 
     sections = [
         _render_thesis(snap),
+        _render_price_levels(snap, watchlist_entry),
         _render_conviction(snap, watchlist_entry),
         _render_catalyst(snap),
         _render_regime(snap),
@@ -471,7 +605,7 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
     return f"""
 <section class='ticker-card' id='ticker-{html.escape(ticker)}'>
   <div class='card-head'>
-    <span class='symbol'>{html.escape(ticker)}</span>
+    <span class='symbol'>{_ticker_link(ticker)}</span>
     <span class='tier-badge tier-{html.escape(tier)}'>Tier {html.escape(tier)}</span>
     {" ".join(user_pills)}
     <span class='meta'>{html.escape(sector)} · {_fmt_money(mkt_cap)} mkt cap · as of {html.escape(snap.get('as_of', '?'))}</span>
@@ -494,6 +628,101 @@ def _render_thesis(snap: dict) -> str:
 <div class='thesis'>
   <span class='label'>Thesis</span>
   <p>{html.escape(thesis['text'])}</p>
+</div>
+"""
+
+
+def _render_price_levels(snap: dict, watchlist_entry: dict) -> str:
+    """Actionable price levels panel — mirrors the v17 dip-engine pattern:
+    dip entry zone + rally sell zone at the configured conviction
+    percentile, plus per-user target/stop derived from the conviction
+    breakdown's targets block."""
+    pl = snap.get("price_levels")
+    if not pl or pl.get("status") == "pending":
+        return _pending_panel("Price levels — dip entry, rally sell, stop, target", "Will appear once step 6 (Monte Carlo) ships. Pattern mirrors the v17 dip engine: the dip-entry price is the level at which the configured percentile of MC paths touches on the way down; rally-sell is the same on the way up. Date ranges are ±7 trading sessions around the median touch date.")
+
+    current = pl.get("current_price")
+    rsi = pl.get("rsi")
+    high_60d = pl.get("high_60d")
+
+    pct = config.THRESHOLDS.price_levels.dip_conviction_percentile
+    holders = watchlist_entry.get("holders") or {}
+
+    horizon_blocks: list[str] = []
+    for h in config.HORIZONS:
+        zones = (pl.get("horizons") or {}).get(h) or (pl.get("horizons") or {}).get(str(h))
+        if not zones:
+            continue
+        dip = zones.get("dip", {})
+        rally = zones.get("rally", {})
+        dip_pct = (dip.get("price", 0) - current) / current * 100 if current else 0
+        rally_pct = (rally.get("price", 0) - current) / current * 100 if current else 0
+
+        # Per-user target/stop summary lines.
+        per_user_lines = []
+        conviction_block = (snap.get("conviction") or {}).get("horizons", {}).get(h, {})
+        for user in config.USERS:
+            if user not in holders:
+                continue
+            state = holders[user].get("state", "watching")
+            targets = (conviction_block.get(user) or {}).get("targets") or {}
+            stop = targets.get("stop")
+            target = targets.get("target")
+            entry = holders[user].get("entry") if state == "entered" else None
+            pieces = [f"<strong>{user.title()}</strong> ({state})"]
+            if state == "entered" and entry:
+                pieces.append(f"in @ ${entry:.2f}")
+            if target:
+                t_pct = (target - current) / current * 100 if current else 0
+                pieces.append(f"target ${target:.2f} ({t_pct:+.1f}%)")
+            if stop:
+                s_pct = (stop - current) / current * 100 if current else 0
+                pieces.append(f"stop ${stop:.2f} ({s_pct:+.1f}%)")
+            per_user_lines.append(f"<div class='pl-user-row'>{' · '.join(pieces)}</div>")
+
+        dip_html = "" if not dip else f"""
+<div class='pl-zone dip'>
+  <span class='pl-icon'>⬇</span>
+  <span class='pl-name'>Dip entry zone</span>
+  <span class='pl-detail'>${dip['price']:.2f} ({dip_pct:+.1f}%) · {html.escape(dip['date_range'])} · {int(pct*100)}% of MC paths touch this</span>
+  <span class='pl-value'>${dip['price']:.2f}</span>
+</div>
+"""
+        rally_html = "" if not rally else f"""
+<div class='pl-zone rally'>
+  <span class='pl-icon'>⬆</span>
+  <span class='pl-name'>Rally sell zone</span>
+  <span class='pl-detail'>${rally['price']:.2f} ({rally_pct:+.1f}%) · {html.escape(rally['date_range'])} · {int(pct*100)}% of MC paths touch this</span>
+  <span class='pl-value'>${rally['price']:.2f}</span>
+</div>
+"""
+        horizon_blocks.append(f"""
+<div class='pl-horizon'>
+  <div class='pl-hlabel'>{h}-day horizon</div>
+  {dip_html}
+  {rally_html}
+  {"".join(per_user_lines)}
+</div>
+""")
+
+    current_str = f"<strong>${current:.2f}</strong>" if current else "?"
+    extras = []
+    if rsi is not None:
+        extras.append(f"RSI {rsi}")
+    if high_60d is not None:
+        extras.append(f"60d high ${high_60d:.2f}")
+    extras_html = " · " + " · ".join(extras) if extras else ""
+
+    return f"""
+<div class='price-levels'>
+  <div class='pl-head'>
+    <span class='title'>Price levels — where to act</span>
+    <span class='current'>Current: {current_str}{extras_html}</span>
+  </div>
+  <div class='pl-explainer'>
+    Dip-entry and rally-sell prices are derived from {config.MC_PATHS:,} Monte Carlo paths over each horizon: the level at which <strong>{int(pct*100)}%</strong> of simulated futures touch on the way down (dip) or up (rally). Date ranges show the ±{config.THRESHOLDS.price_levels.date_range_half_width_sessions}-session window around the median touch date.
+  </div>
+  {"".join(horizon_blocks)}
 </div>
 """
 
@@ -538,17 +767,14 @@ def _render_conviction(snap: dict, watchlist_entry: dict) -> str:
 
 
 def _render_one_horizon(horizon_days: int, per_horizon: dict, holders: dict) -> str:
-    users = per_horizon.get("users", {})
-
-    # We display the breakdown once per user (since user_state can affect
-    # which vetoes fire). For the common case where both users are in
-    # the same state, the breakdowns will be identical — we don't merge
-    # them in v1 (keeps rendering simple). v1.x could optimize.
+    # per_horizon is keyed directly by user: {"aidy": {...}, "jesse": {...}}.
+    # We display the breakdown once per user since user_state can affect
+    # which vetoes fire.
     user_columns = []
     for user in config.USERS:
-        if user not in users:
+        if user not in per_horizon:
             continue
-        u = users[user]
+        u = per_horizon[user]
         breakdown = u["breakdown"]
         targets = u.get("targets", {})
         verdict_label = breakdown["verdict_label"]
@@ -698,33 +924,39 @@ def _render_catalyst(snap: dict) -> str:
     analyst = cat.get("analyst_revisions") or {}
     rec = cat.get("engine_recommendation") or ""
 
-    lines = []
+    rows = []
     if next_event:
-        lines.append(f"<div class='catalyst-line'><span class='icon'>⚡</span><span class='label'>Next event</span><span class='value'>{html.escape(next_event['type'])} on {html.escape(next_event['date'])} ({distance} session{'s' if distance != 1 else ''} away)</span></div>")
+        rows.append(f"""<div class='cat-row'><span class='cat-icon'>⚡</span><span class='cat-label'>Next event</span><span class='cat-value'>{html.escape(next_event['type'])} — {html.escape(next_event['date'])} ({distance} session{'s' if distance != 1 else ''} away)</span></div>""")
+    else:
+        rows.append(f"""<div class='cat-row'><span class='cat-icon'>·</span><span class='cat-label'>Next event</span><span class='cat-value'>None scheduled</span></div>""")
     if implied is not None:
-        lines.append(f"<div class='catalyst-line'><span class='label'>Options-implied move</span><span class='value'>±{implied*100:.1f}% (straddle)</span></div>")
+        rows.append(f"""<div class='cat-row'><span class='cat-icon'>±</span><span class='cat-label'>Options-implied move</span><span class='cat-value'>±{implied*100:.1f}% (event-day straddle)</span></div>""")
     if analyst:
-        trend_str = analyst.get('trend', '')
-        lines.append(f"<div class='catalyst-line'><span class='label'>Analyst PT revisions (14d)</span><span class='value'>{analyst.get('count', '?')} upgrades, avg PT ${analyst.get('avg_pt', '?')} ({trend_str})</span></div>")
+        rows.append(f"""<div class='cat-row'><span class='cat-icon'>📊</span><span class='cat-label'>Analyst revisions (14d)</span><span class='cat-value'>{analyst.get('count', '?')} updates, avg PT ${analyst.get('avg_pt', '?')} ({html.escape(analyst.get('trend', ''))})</span></div>""")
 
     reactions_html = ""
     if reactions:
-        rows = "".join(
+        avg = sum(r["reaction_pct"] for r in reactions) / len(reactions)
+        body = "".join(
             f"<tr><td>{html.escape(r['date'])}</td><td>{html.escape(r.get('type', 'earnings'))}</td><td class='num'>{r['reaction_pct']:+.1f}%</td></tr>"
             for r in reactions
         )
-        avg = sum(r["reaction_pct"] for r in reactions) / len(reactions)
         reactions_html = f"""
-<div style='margin-top: 8px; font-size: 12px; color: var(--text-soft);'>Last {len(reactions)} earnings reactions (avg {avg:+.1f}%):</div>
-<table class='reactions-table'>
-  <thead><tr><th>Date</th><th>Type</th><th style='text-align:right;'>Reaction</th></tr></thead>
-  <tbody>{rows}</tbody>
-</table>
+<div class='cat-section-title'>Last {len(reactions)} event reactions (avg {avg:+.1f}%):</div>
+<div class='table-scroll'>
+  <table class='reactions-table'>
+    <thead><tr><th>Date</th><th>Type</th><th style='text-align:right;'>Reaction</th></tr></thead>
+    <tbody>{body}</tbody>
+  </table>
+</div>
 """
 
     news_html = ""
     if news:
-        news_html = f"<div style='margin-top: 8px; font-size: 12px; color: var(--text-soft);'>Recent news ({len(news)} headlines):</div><ul class='news-bullets'>{''.join(f'<li>{html.escape(n)}</li>' for n in news)}</ul>"
+        news_html = (
+            f"<div class='cat-section-title'>Recent news ({len(news)} headlines):</div>"
+            f"<ul class='news-bullets'>{''.join(f'<li>{html.escape(n)}</li>' for n in news)}</ul>"
+        )
 
     rec_html = f"<div class='engine-rec'><strong>Engine read:</strong> {html.escape(rec)}</div>" if rec else ""
 
@@ -734,18 +966,29 @@ def _render_catalyst(snap: dict) -> str:
     <span class='title'>Catalyst narrative</span>
     <span class='meta'>step 3 — catalyst detection</span>
   </div>
-  {"".join(lines)}
-  {reactions_html}
-  {news_html}
-  {rec_html}
+  <div class='catalyst-block'>
+    {"".join(rows)}
+    {reactions_html}
+    {news_html}
+    {rec_html}
+  </div>
 </div>
 """
+
+
+_REGIME_PLAIN_ENGLISH = {
+    "uptrend_quiet":  "Sustained upward trend with normal day-to-day price swings — the calmest, most predictable bullish regime.",
+    "uptrend_noisy":  "Trending upward but with elevated daily volatility — the direction is right but the path is choppy.",
+    "downtrend":      "Sustained downward trend with persistent selling pressure — historically these don't reverse quickly.",
+    "sideways":       "Range-bound, no clear direction — neither uptrend nor downtrend; price oscillates around a flat mean.",
+    "crisis":         "Extreme volatility, breakdown of normal regime structure — typical of macro shocks or company-specific catastrophes.",
+}
 
 
 def _render_regime(snap: dict) -> str:
     r = snap.get("regime")
     if not r or r.get("status") == "pending":
-        return _pending_panel("Regime detector", "HMM-derived regime state with confidence + duration. Feeds MC drift (Layer 1) and Layer-3 ENTER vetoes. Will appear once step 2 ships.")
+        return _pending_panel("Regime", "What the recent price action says about the prevailing direction and volatility character. Will appear once step 2 (HMM regime detector) ships.")
     state = r.get("state", "?")
     conf = r.get("confidence", 0.0)
     duration = r.get("days_in_regime", 0)
@@ -753,17 +996,40 @@ def _render_regime(snap: dict) -> str:
     narrative = r.get("narrative", "")
     veto_active = r.get("veto_active", False)
     veto_class = "veto-fired" if veto_active else ""
+
+    state_meaning = _REGIME_PLAIN_ENGLISH.get(state, "")
+
+    if veto_active:
+        means = "Layer-3 ENTER veto is active — engine recommends WAIT for a reversal signal (RSI recovering, 20-day momentum turning positive, volume on green days) before any new entry. Existing positions get explicit regime-risk language but no auto-EXIT."
+    elif state.startswith("uptrend"):
+        means = "Regime supports new entries: drift fed to MC is positive, no Layer-3 veto. The conviction breakdown still has to clear the ENTER threshold — regime is necessary but not sufficient."
+    elif state == "sideways":
+        means = "No directional edge from regime — drift fed to MC is near zero, no Layer-3 veto. Entries here rely on edge from other factors (catalysts, fair-value, mean-reversion)."
+    else:
+        means = "Drift fed to MC reflects regime direction. Watch for confidence ≥ 70% if state is downtrend/crisis — that threshold triggers the Layer-3 ENTER veto."
+
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>Regime</span><span class='meta'>step 2 — HMM</span></div>
+  <div class='head'><span class='title'>Regime — what the price action says</span><span class='meta'>step 2 — HMM</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    A statistical model classifies the past ~60 sessions into one of five regimes
+    (uptrend-quiet, uptrend-noisy, downtrend, sideways, crisis). The current regime + its
+    confidence drive (1) the daily drift parameter inside Monte Carlo (Layer 1 of conviction)
+    and (2) the Layer-3 ENTER veto when state is downtrend/crisis with ≥70% confidence.
+  </div>
   <div class='kv-row {veto_class}'>
     <span class='k'>Current state</span>
-    <span class='v'>{html.escape(state)}</span>
-    <span class='v-right'>{conf*100:.0f}% confidence{' — ENTER veto active' if veto_active else ''}</span>
+    <span class='v'>{html.escape(state)} — <span style='color: var(--text-soft); font-family: inherit;'>{html.escape(state_meaning)}</span></span>
+    <span class='v-right'>{conf*100:.0f}% confidence{' — VETO active' if veto_active else ''}</span>
   </div>
-  <div class='kv-row'><span class='k'>Days in this regime</span><span class='v'>{duration}</span><span></span></div>
-  <div class='kv-row'><span class='k'>Implied annualized drift (fed to MC)</span><span class='v'>{drift*100:+.1f}%/year</span><span></span></div>
+  <div class='kv-row'><span class='k'>Days in this regime</span><span class='v'>{duration} sessions</span><span class='v-right' style='color: var(--muted);'>longer = more durable</span></div>
+  <div class='kv-row'><span class='k'>Implied annual drift (fed to MC)</span><span class='v'>{drift*100:+.1f}% per year</span><span class='v-right' style='color: var(--muted);'>this number directly shifts P(target)</span></div>
   {f"<div style='font-size: 12.5px; color: var(--text-soft); margin-top: 8px; line-height: 1.55;'>{html.escape(narrative)}</div>" if narrative else ""}
+  <div class='what-it-means'>
+    <span class='label'>What this means for you</span>
+    {html.escape(means)}
+  </div>
 </div>
 """
 
@@ -771,18 +1037,39 @@ def _render_regime(snap: dict) -> str:
 def _render_volatility(snap: dict) -> str:
     v = snap.get("volatility")
     if not v or v.get("status") == "pending":
-        return _pending_panel("Volatility forecast (GARCH)", "GARCH(1,1) forward vol path. Tier B and C tickers get widened confidence bands. Will appear once step 4 ships.")
+        return _pending_panel("Volatility forecast — how much the price typically swings", "Will appear once step 4 (GARCH(1,1) vol model) ships. Will show current realized vol vs forward forecast for both horizons, with confidence band widened by tier.")
     current = v.get("current_realized_pct", 0.0)
     forecast_30 = v.get("forecast_30d_pct", 0.0)
     forecast_60 = v.get("forecast_60d_pct", 0.0)
     band_width = v.get("confidence_band", "tight")
+    daily_swing_pct = current * 100 / (252 ** 0.5)  # de-annualize for plain-English daily figure
+
+    # Forecast direction interpretation
+    if forecast_30 < current * 0.92:
+        forecast_meaning = "Vol forecast to fall meaningfully — calmer days expected. Tighter stops can be justified."
+    elif forecast_30 > current * 1.08:
+        forecast_meaning = "Vol forecast to rise — choppier days ahead. Stops and targets should be set wider to avoid being shaken out by normal noise."
+    else:
+        forecast_meaning = "Vol forecast roughly flat — set stop/target distances proportional to current realized vol."
+
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>Volatility forecast (GARCH)</span><span class='meta'>step 4</span></div>
-  <div class='kv-row'><span class='k'>Current realized vol (60d trailing)</span><span class='v'>{current*100:.1f}% annualized</span><span></span></div>
-  <div class='kv-row'><span class='k'>Forecast end-of-30d</span><span class='v'>{forecast_30*100:.1f}%</span><span></span></div>
-  <div class='kv-row'><span class='k'>Forecast end-of-60d</span><span class='v'>{forecast_60*100:.1f}%</span><span></span></div>
-  <div class='kv-row'><span class='k'>Confidence band</span><span class='v'>{html.escape(band_width)} (set by tier)</span><span></span></div>
+  <div class='head'><span class='title'>Volatility — how much the price typically swings</span><span class='meta'>step 4 — GARCH(1,1)</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    Realized volatility = the standard deviation of daily returns, scaled to an annual figure
+    (multiply by √252). A 30% annualized vol means the stock's typical year-over-year price
+    swing is about 30% of its own price. GARCH(1,1) is a model that captures how today's
+    vol depends on recent vol (vol tends to cluster — calm follows calm, wild follows wild).
+  </div>
+  <div class='kv-row'><span class='k'>Current realized vol (60d trailing)</span><span class='v'>{current*100:.1f}% annualized</span><span class='v-right' style='color: var(--muted);'>≈ {daily_swing_pct:.1f}% typical daily move</span></div>
+  <div class='kv-row'><span class='k'>Forecast end-of-30d</span><span class='v'>{forecast_30*100:.1f}% annualized</span><span></span></div>
+  <div class='kv-row'><span class='k'>Forecast end-of-60d</span><span class='v'>{forecast_60*100:.1f}% annualized</span><span></span></div>
+  <div class='kv-row'><span class='k'>Confidence band (set by tier)</span><span class='v'>{html.escape(band_width)}</span><span class='v-right' style='color: var(--muted);'>Tier A tight, B moderate, C wide</span></div>
+  <div class='what-it-means'>
+    <span class='label'>What this means for you</span>
+    {html.escape(forecast_meaning)} Higher vol also means the dip-entry and rally-sell zones in the price-levels panel will be further from current price — the model expects more movement in both directions, so the actionable levels spread out.
+  </div>
 </div>
 """
 
@@ -790,19 +1077,52 @@ def _render_volatility(snap: dict) -> str:
 def _render_fair_value(snap: dict) -> str:
     fv = snap.get("fair_value")
     if not fv or fv.get("status") == "pending":
-        return _pending_panel("Fair value", "Multi-method triangulation (multiples + DCF + comparable transactions). Will appear once step 5 ships.")
+        return _pending_panel("Fair value — what the stock is fundamentally worth", "Will appear once step 5 (multi-method fair-value triangulation) ships. Will show fair-value range, current price vs mean (in standard deviations), and which methods contributed.")
     low = fv.get("range_low", 0.0)
     mean = fv.get("range_mean", 0.0)
     high = fv.get("range_high", 0.0)
     current = fv.get("current_price", 0.0)
     sigmas = fv.get("premium_sigmas", 0.0)
     methods = fv.get("methods", [])
+
+    # Plain-English interpretation of the sigma figure
+    if sigmas <= -1.5:
+        sigma_meaning = "Meaningfully cheap — well below the fair-value mean. Supports new entries (no Layer-3 veto from valuation)."
+        sigma_class = "ok"
+    elif sigmas <= -0.5:
+        sigma_meaning = "Modestly cheap — slight tailwind for new entries."
+        sigma_class = "ok"
+    elif sigmas <= 0.5:
+        sigma_meaning = "Fairly valued — no valuation-driven push in either direction."
+        sigma_class = "info"
+    elif sigmas <= 1.5:
+        sigma_meaning = "Modestly expensive — headwind for new entries but no veto. Entered positions remain HOLD."
+        sigma_class = "warn"
+    elif sigmas < 2.0:
+        sigma_meaning = "Approaching the +2σ veto threshold — close to triggering TRIM for entered positions and SKIP for watching."
+        sigma_class = "warn"
+    else:
+        sigma_meaning = "≥ +2σ premium — Layer-3 fair-value veto fires: watching → SKIP, entered → TRIM (take some profit at this extreme)."
+        sigma_class = "fail"
+
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>Fair value</span><span class='meta'>step 5</span></div>
-  <div class='kv-row'><span class='k'>Fair-value range</span><span class='v'>${low:.2f} — ${mean:.2f} — ${high:.2f}</span><span></span></div>
-  <div class='kv-row'><span class='k'>Current price vs FV mean</span><span class='v'>${current:.2f}</span><span class='v-right'>{sigmas:+.2f}σ</span></div>
-  <div class='kv-row'><span class='k'>Methods contributing</span><span class='v'>{", ".join(html.escape(m) for m in methods)}</span><span></span></div>
+  <div class='head'><span class='title'>Fair value — what the stock is fundamentally worth</span><span class='meta'>step 5</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    Multi-method triangulation of fundamental value: forward P/E vs sector peers, discounted-cash-flow
+    where input quality is sufficient, and recent comparable transactions. The output is a RANGE (not a
+    point estimate) reflecting genuine uncertainty in valuation. The σ figure measures how far today's
+    market price sits above (+) or below (−) the range mean, in units of the range's own standard
+    deviation: ±1σ means "roughly within the normal valuation range"; ±2σ means "meaningfully outside it."
+  </div>
+  <div class='kv-row'><span class='k'>Fair-value range (low — mean — high)</span><span class='v'>${low:.2f} — ${mean:.2f} — ${high:.2f}</span><span></span></div>
+  <div class='kv-row'><span class='k'>Current market price</span><span class='v'>${current:.2f}</span><span class='v-right'><span class='pill pill-{sigma_class}'>{sigmas:+.2f}σ vs FV mean</span></span></div>
+  <div class='kv-row'><span class='k'>Methods contributing</span><span class='v' style='font-family: inherit; font-size: 12px;'>{", ".join(html.escape(m) for m in methods)}</span><span></span></div>
+  <div class='what-it-means'>
+    <span class='label'>What this means for you</span>
+    {html.escape(sigma_meaning)}
+  </div>
 </div>
 """
 
@@ -810,8 +1130,33 @@ def _render_fair_value(snap: dict) -> str:
 def _render_cross_check(snap: dict) -> str:
     cc = snap.get("cross_check")
     if not cc or cc.get("status") == "pending":
-        return _pending_panel("MC ↔ PDE agreement", "Side-by-side per horizon. Will appear once steps 6 and 7 both ship.")
+        return _pending_panel("Math cross-check — do two independent forecasts agree?", "Will appear once steps 6 (Monte Carlo) and 7 (Fokker-Planck PDE) both ship. Side-by-side comparison of the two methods on P(target), P(stop), and EV at each horizon.")
     horizons = cc.get("horizons", {})
+
+    # Compute headline: how many of the (horizon × metric) pairs agreed?
+    total = 0
+    agree_count = 0
+    max_pp_delta = 0.0
+    for h in config.HORIZONS:
+        d = horizons.get(h) or horizons.get(str(h))
+        if not d:
+            continue
+        for metric in ("p_target", "p_stop", "ev"):
+            total += 1
+            if d.get(f"agree_{metric}", False):
+                agree_count += 1
+            delta = d.get(f"delta_{metric}", 0)
+            scale_pp = 100 if metric != "ev" else 100
+            max_pp_delta = max(max_pp_delta, abs(delta) * scale_pp)
+    all_agree = (agree_count == total) and total > 0
+
+    if all_agree:
+        headline_class = "ok"
+        headline_text = f"All {total} comparisons agree within tolerance — both methods independently arrive at the same answer. No Layer-2 haircut applied to conviction."
+    else:
+        headline_class = "warn"
+        headline_text = f"{total - agree_count} of {total} comparison(s) outside tolerance (largest gap: {max_pp_delta:.1f}pp). Layer-2 confidence haircut applies to conviction."
+
     rows = []
     for h in config.HORIZONS:
         d = horizons.get(h) or horizons.get(str(h))
@@ -821,28 +1166,42 @@ def _render_cross_check(snap: dict) -> str:
             mc = d.get(f"mc_{metric}")
             pde = d.get(f"pde_{metric}")
             delta = d.get(f"delta_{metric}")
-            tol = d.get(f"tolerance_{metric}")
             agree = d.get(f"agree_{metric}", False)
             agree_cls = "agree-ok" if agree else "agree-warn"
-            agree_label = "within tolerance" if agree else "outside tolerance"
+            agree_label = "✓ within tol" if agree else "⚠ outside tol"
             display_metric = {"p_target": "P(target)", "p_stop": "P(stop)", "ev": "EV"}[metric]
-            unit = "" if metric == "ev" else "%"
-            scale = 100 if metric != "ev" else 100
+            unit = "%" if metric != "ev" else "%"
             rows.append(
                 f"<tr><td>{h}d</td><td>{display_metric}</td>"
-                f"<td class='num'>{mc*scale:+.2f}{unit if metric == 'ev' else ('%' if scale==100 else '')}</td>"
-                f"<td class='num'>{pde*scale:+.2f}{unit if metric == 'ev' else ('%' if scale==100 else '')}</td>"
-                f"<td class='num'>Δ {abs(delta)*scale:.2f}{unit if metric == 'ev' else 'pp'}</td>"
+                f"<td class='num'>{mc*100:+.2f}{unit}</td>"
+                f"<td class='num'>{pde*100:+.2f}{unit}</td>"
+                f"<td class='num'>Δ {abs(delta)*100:.2f}{'pp' if metric != 'ev' else 'pp'}</td>"
                 f"<td class='num {agree_cls}'>{agree_label}</td>"
                 f"</tr>"
             )
+
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>MC ↔ PDE agreement</span><span class='meta'>step 7 cross-check</span></div>
-  <table class='agreement-table'>
-    <thead><tr><th>Horizon</th><th>Metric</th><th style='text-align:right;'>MC</th><th style='text-align:right;'>PDE</th><th style='text-align:right;'>Δ</th><th style='text-align:right;'>Agreement</th></tr></thead>
-    <tbody>{"".join(rows)}</tbody>
-  </table>
+  <div class='head'><span class='title'>Math cross-check — do two independent forecasts agree?</span><span class='meta'>step 7 — MC vs Fokker-Planck PDE</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    We compute the same forecast (P(target hit first), P(stop hit first), expected value) two
+    completely different ways: random simulation (50,000 Monte Carlo paths) AND solving a
+    deterministic differential equation. The methods make different mathematical assumptions —
+    when they agree, the answer is robust; when they diverge, at least one is being stretched
+    by unusual conditions, so we don't know which to trust. Conviction gets a Layer-2 haircut
+    when they disagree by more than {config.THRESHOLDS.cross_check.p_target_agreement_tolerance_pp:.1f}pp.
+  </div>
+  <div class='what-it-means' style='background: #{"f0fdf4" if all_agree else "fffbeb"}; border-left-color: var(--{headline_class});'>
+    <span class='label' style='color: var(--{headline_class});'>Headline</span>
+    {html.escape(headline_text)}
+  </div>
+  <div class='table-scroll' style='margin-top: 10px;'>
+    <table class='agreement-table'>
+      <thead><tr><th>Horizon</th><th>Metric</th><th style='text-align:right;'>MC</th><th style='text-align:right;'>PDE</th><th style='text-align:right;'>Δ</th><th style='text-align:right;'>Agreement</th></tr></thead>
+      <tbody>{"".join(rows)}</tbody>
+    </table>
+  </div>
 </div>
 """
 
@@ -850,23 +1209,46 @@ def _render_cross_check(snap: dict) -> str:
 def _render_classifier(snap: dict) -> str:
     c = snap.get("tier_classifier")
     if not c or c.get("status") != "ok":
-        return _pending_panel("§4.2 measured-tier check", "Watchlist anchor vs measurement-driven classifier across 4 behavioral properties. Lights up after step 1 (data fetch) completes.")
+        return _pending_panel("Tier sanity-check — does the math match the label?", "Lights up after step 1 (data fetch) completes.")
     props = c.get("properties") or {}
     comparison = c.get("comparison") or {}
     anchor = comparison.get("anchor", "?")
     measured = comparison.get("measured", "?")
     direction = comparison.get("direction", "?")
-    direction_pill = {
-        "match":    "<span class='pill pill-ok'>match</span>",
-        "stricter": "<span class='pill pill-warn'>measured stricter (B-tier behavior on A-tier anchor, etc.)</span>",
-        "looser":   "<span class='pill pill-info'>measured looser</span>",
-    }.get(direction, f"<span class='pill pill-pending'>{html.escape(direction)}</span>")
+
+    if direction == "match":
+        direction_pill = "<span class='pill pill-ok'>match — no haircut</span>"
+        headline = f"The {anchor}-tier label you set matches the stock's actual recent behavior. No confidence haircut applies."
+        means = (
+            f"The pipeline ran Tier-{anchor} statistical assumptions (drift bands, volatility-of-volatility widening, fat-tailed priors if C) "
+            f"that match how this stock has actually been behaving over the last 90 sessions. The conviction score you see is calibrated to "
+            f"this stock's real character."
+        )
+    elif direction == "stricter":
+        direction_pill = "<span class='pill pill-warn'>measured stricter</span>"
+        headline = f"Your watchlist label is {anchor}, but the stock has been behaving like a {measured}-tier name (more volatile / thinner / less mature) for the last several sessions."
+        means = (
+            f"If this mismatch persists for 5+ consecutive nights, Layer-2 confidence gets a 20% haircut because the engine ran the wrong "
+            f"priors. Consider re-anchoring the watchlist to Tier {measured} via the conversational interface."
+        )
+    elif direction == "looser":
+        direction_pill = "<span class='pill pill-info'>measured looser</span>"
+        headline = f"Your watchlist label is {anchor}, but the stock has been behaving like a calmer {measured}-tier name lately."
+        means = (
+            f"Conservative direction — engine ran tighter statistical assumptions than the stock's actual behavior would warrant. "
+            f"No conviction haircut (we only haircut when measured is stricter). You may be leaving edge on the table if this persists."
+        )
+    else:
+        direction_pill = f"<span class='pill pill-pending'>{html.escape(direction)}</span>"
+        headline = "—"
+        means = "—"
+
     rows = []
-    for prop_name, display in [
-        ("vol_annualized", "90d realized vol (annualized)"),
-        ("vol_of_vol", "90d vol-of-vol"),
-        ("adv_usd", "20d avg daily $ volume"),
-        ("history_days", "Days of clean history"),
+    for prop_name, display, prop_explain in [
+        ("vol_annualized", "90d realized vol",        "Typical annualized price swing"),
+        ("vol_of_vol",     "90d vol-of-vol",          "How much the vol itself swings"),
+        ("adv_usd",        "20d avg daily $ volume",  "Liquidity — bigger = easier trades"),
+        ("history_days",   "Days of clean history",   "More history = more reliable calibration"),
     ]:
         p = props.get(prop_name) or {}
         val = p.get("value")
@@ -880,17 +1262,34 @@ def _render_classifier(snap: dict) -> str:
         else:
             val_display = str(int(val)) if val is not None else "?"
         rows.append(
-            f"<tr><td>{display}</td><td class='num'>{val_display}</td><td>"
+            f"<tr><td>{display}<div style='font-size: 11px; color: var(--muted);'>{prop_explain}</div></td>"
+            f"<td class='num'>{val_display}</td><td>"
             f"<span class='tier-badge tier-{html.escape(tier)}'>Tier {html.escape(tier)}</span></td></tr>"
         )
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>§4.2 measured-tier check</span><span class='meta'>advisory in v1.0</span></div>
-  <div class='kv-row'><span class='k'>Watchlist anchor → measured</span><span class='v'>{html.escape(anchor)} → {html.escape(measured)}</span><span class='v-right'>{direction_pill}</span></div>
-  <table class='classifier-table' style='margin-top: 8px;'>
-    <thead><tr><th>Property</th><th style='text-align:right;'>Value</th><th>Score</th></tr></thead>
-    <tbody>{"".join(rows)}</tbody>
-  </table>
+  <div class='head'><span class='title'>Tier sanity-check — does the math match the label?</span><span class='meta'>§4.2 — advisory in v1.0</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    Each ticker has a tier label you set in the watchlist — <strong>A</strong> mega-cap mature (think
+    NVDA-like), <strong>B</strong> mid-cap growth (think AMAT-like), <strong>C</strong> small-cap
+    fat-tailed (think IONQ-like). The pipeline uses your label to pick which statistical assumptions
+    to run. This panel independently measures the stock's actual recent behavior — vol, vol-of-vol,
+    liquidity, history — and tells you whether the label you set still matches reality. If the math
+    has migrated tiers (e.g. a B-anchored name now behaving like C), the conviction confidence gets
+    a Layer-2 haircut.
+  </div>
+  <div class='kv-row'><span class='k'>Watchlist anchor → measured</span><span class='v'>Tier {html.escape(anchor)} → Tier {html.escape(measured)}</span><span class='v-right'>{direction_pill}</span></div>
+  <div class='table-scroll' style='margin-top: 8px;'>
+    <table class='classifier-table'>
+      <thead><tr><th>Property</th><th style='text-align:right;'>Value</th><th>Score</th></tr></thead>
+      <tbody>{"".join(rows)}</tbody>
+    </table>
+  </div>
+  <div class='what-it-means'>
+    <span class='label'>What this means for you</span>
+    {html.escape(headline)} {html.escape(means)}
+  </div>
 </div>
 """
 
@@ -898,21 +1297,60 @@ def _render_classifier(snap: dict) -> str:
 def _render_trajectory(snap: dict) -> str:
     t = snap.get("trajectory")
     if not t or t.get("status") == "pending":
-        return _pending_panel("Conviction trajectory", "Sparkline of last N nights' conviction score + rising/stable/decaying/flip-flopping annotation. Populates after a few nights of accumulated snapshots.")
+        return _pending_panel("Conviction trajectory — is the signal durable or flip-flopping?", "Populates after a few nights of accumulated snapshots. The sparkline will show the last 20 nights of conviction scores with the ENTER threshold marked.")
     nightly_scores = t.get("nightly_scores", [])
     annotation = t.get("annotation", "stable")
     trend_class = annotation if annotation in ("rising", "decaying", "stable", "unstable") else "stable"
     svg = _sparkline_svg(nightly_scores)
     summary = t.get("summary", "")
+
+    # Plain-English interpretation of the trajectory annotation
+    if annotation == "rising":
+        means = (
+            "Conviction has been rising — multiple consecutive nights have confirmed the same directional read, "
+            "with new data each night pushing the score higher. Durable signal. No Layer-2 haircut applies."
+        )
+    elif annotation == "stable":
+        means = (
+            "Conviction has been holding steady — the signal is durable, just not changing. Multiple nights of "
+            "the same answer means we can trust today's read. No Layer-2 haircut applies."
+        )
+    elif annotation == "decaying":
+        means = (
+            "Conviction has been falling — multiple consecutive nights have weakened the signal. The thesis is "
+            "deteriorating. No haircut from the trajectory itself, but the lower current score will already be "
+            "reflected in the verdict label."
+        )
+    elif annotation == "unstable":
+        means = (
+            "Conviction has been flip-flopping across recent nights — verdict has changed direction 3+ times in "
+            "the last 5 sessions. This means we're at a regime boundary and small new data points are flipping the "
+            "answer. Layer-2 confidence gets a 10% haircut — today's read is less trustworthy than usual."
+        )
+    else:
+        means = "—"
+
     return f"""
 <div class='subpanel'>
-  <div class='head'><span class='title'>Conviction trajectory</span><span class='meta'>last {len(nightly_scores)} nights</span></div>
+  <div class='head'><span class='title'>Conviction trajectory — is the signal durable or flip-flopping?</span><span class='meta'>last {len(nightly_scores)} nights</span></div>
+  <div class='what-it-is'>
+    <span class='label'>What this is</span>
+    Each night the engine writes a snapshot containing that night's conviction score for every (ticker × horizon).
+    This panel plots the last {len(nightly_scores)} nights' scores as a sparkline. A signal that says ENTER 5 nights
+    in a row is more trustworthy than one that flipped ENTER → WAIT → ENTER → SKIP → ENTER over the same 5 nights —
+    the latter pattern means we're at a regime boundary and shouldn't trust today's read too much. The dashed
+    green line marks the ENTER threshold ({config.THRESHOLDS.conviction.vetoes.enter_score_threshold:.2f}) for reference.
+  </div>
   <div class='sparkline-block'>
     {svg}
     <div class='description'>
-      <div class='trend {trend_class}'>{html.escape(annotation)}</div>
+      <div class='trend {trend_class}' style='font-size: 14px;'>{html.escape(annotation)}</div>
       <div>{html.escape(summary)}</div>
     </div>
+  </div>
+  <div class='what-it-means'>
+    <span class='label'>What this means for you</span>
+    {html.escape(means)}
   </div>
 </div>
 """

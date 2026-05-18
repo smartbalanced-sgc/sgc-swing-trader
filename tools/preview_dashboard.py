@@ -123,6 +123,22 @@ def _build_nvda() -> dict:
     return {
         "ticker": "NVDA", "run_date": "2026-05-18", "as_of": "2026-05-16", "tier_anchor": "A",
         "data": _ok_data_block(profile={"sector": "Technology", "industry": "Semiconductors", "market_cap": 4_800_000_000_000}, bar_count=1258),
+        "price_levels": {
+            "status": "ok",
+            "current_price": 225.32,
+            "rsi": 65,
+            "high_60d": 238.40,
+            "horizons": {
+                30: {
+                    "dip":   {"price": 217.20, "date_range": "May 28 — Jun 06"},
+                    "rally": {"price": 240.95, "date_range": "Jun 02 — Jun 11"},
+                },
+                60: {
+                    "dip":   {"price": 212.50, "date_range": "Jun 04 — Jun 18"},
+                    "rally": {"price": 250.70, "date_range": "Jun 11 — Jun 25"},
+                },
+            },
+        },
         "thesis": {
             "status": "ok",
             "text": (
@@ -268,6 +284,22 @@ def _build_amat() -> dict:
     return {
         "ticker": "AMAT", "run_date": "2026-05-18", "as_of": "2026-05-16", "tier_anchor": "B",
         "data": _ok_data_block(profile={"sector": "Technology", "industry": "Semiconductor Equipment", "market_cap": 172_000_000_000}, bar_count=1258),
+        "price_levels": {
+            "status": "ok",
+            "current_price": 436.62,
+            "rsi": 62,
+            "high_60d": 478.20,
+            "horizons": {
+                30: {
+                    "dip":   {"price": 414.30, "date_range": "May 29 — Jun 09"},
+                    "rally": {"price": 467.20, "date_range": "Jun 03 — Jun 13"},
+                },
+                60: {
+                    "dip":   {"price": 402.10, "date_range": "Jun 05 — Jun 19"},
+                    "rally": {"price": 488.40, "date_range": "Jun 12 — Jun 26"},
+                },
+            },
+        },
         "thesis": {
             "status": "ok",
             "text": (
@@ -405,6 +437,22 @@ def _build_ionq() -> dict:
     return {
         "ticker": "IONQ", "run_date": "2026-05-18", "as_of": "2026-05-16", "tier_anchor": "C",
         "data": _ok_data_block(profile={"sector": "Technology", "industry": "Quantum Computing", "market_cap": 7_500_000_000}, bar_count=1100, has_warn=True),
+        "price_levels": {
+            "status": "ok",
+            "current_price": 51.95,
+            "rsi": 31,
+            "high_60d": 75.40,
+            "horizons": {
+                30: {
+                    "dip":   {"price": 42.30, "date_range": "Jun 02 — Jun 13"},
+                    "rally": {"price": 62.10, "date_range": "May 26 — Jun 06"},
+                },
+                60: {
+                    "dip":   {"price": 38.50, "date_range": "Jun 12 — Jun 26"},
+                    "rally": {"price": 68.40, "date_range": "May 28 — Jun 11"},
+                },
+            },
+        },
         "thesis": {
             "status": "ok",
             "text": (

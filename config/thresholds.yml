@@ -206,6 +206,24 @@ materiality:
   # Predicted rally must exceed this to register as a meaningful rally target.
   rally_pct_threshold: 0.03
 
+# ---------- Price levels (dip entry / rally sell zones) ----------
+#
+# These are the prominent, actionable numbers each ticker card shows up
+# top: the price level at which the configured percentile of Monte Carlo
+# paths touches on the way DOWN (= dip entry zone) or on the way UP
+# (= rally sell zone), and the calendar window when that touch is most
+# likely. Same concept the v17 dip engine surfaced under "BUY at $X
+# (conviction 80%)" and "rally target $Y".
+
+price_levels:
+  # Fraction of simulated MC paths that touch the level. v17 used 70%
+  # for both — we keep the parameter split so they can diverge later.
+  dip_conviction_percentile: 0.70
+  rally_conviction_percentile: 0.70
+  # ±N trading sessions around the median date when the dip/rally is
+  # most likely to occur. v17 used 7 (a 2-week window).
+  date_range_half_width_sessions: 7
+
 # ---------- Step 7 — MC ↔ PDE cross-check ----------
 
 cross_check:
