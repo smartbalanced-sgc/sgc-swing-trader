@@ -5,4 +5,9 @@ pandas_market_calendars>=4.4
 # yfinance is used for short-interest data + options-implied vol —
 # fills the FMP Starter gaps documented in docs/FMP_ENDPOINTS.md.
 # Same multi-source pattern as charter §3.3.
-yfinance>=0.2
+yfinance>=0.2.40
+# curl_cffi gives yfinance a real-browser TLS fingerprint so Yahoo's
+# anti-bot detection doesn't flag us on shared CI IP ranges
+# (GitHub Actions / AWS). Critical for reliability per the failover
+# strategy documented in src/data_sources/short_interest.py.
+curl_cffi>=0.7

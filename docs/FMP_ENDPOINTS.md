@@ -110,14 +110,47 @@ insider-trading/search?symbol=TICKER
 FMP support confirmed (2026-05-18): short interest data is not offered
 on Starter at all (not just gated — not in the API).
 
-**Workaround:** use `yfinance` library (free). Fields:
-- `info['sharesShort']` — current short shares
-- `info['shortPercentOfFloat']` — short interest as % of float
-- `info['shortRatio']` — days-to-cover
-- `info['sharesShortPriorMonth']` — for trend comparison
+**Resolution: `src/data_sources/short_interest.py`** implements a
+four-layer failover chain. yfinance is the primary source (free, all
+US-listed equities), hardened for reliable operation on shared CI
+infrastructure where Yahoo's anti-bot detection is otherwise hostile.
 
-This matches the existing multi-source pattern (charter §3.3 already
-uses yfinance for options IV).
+The hardening + failover strategy:
+
+| Layer | Source | When it fires | What you see |
+|---|---|---|---|
+| 1a | Fresh disk cache (≤24h old) | Hit before Yahoo. Short interest publishes biweekly so this is generous | `source: cache:fresh` |
+| 1b | yfinance with `curl_cffi` (Chrome TLS impersonation), 3-attempt retry with jittered exponential backoff (10s/30s/90s), inter-ticker spacing | Cache miss or stale | `source: yfinance:fresh` |
+| 2 | Stale cache (up to 14 days old) | yfinance fails despite retries | `source: cache:stale`, `stale_days: N` shown in UI |
+| 3 | FMP float-proxy qualitative label | No cache + yfinance still fails. Requires `current_float_shares` from FMP profile | `source: fmp:float-proxy`, `float_proxy_label: Low/Medium/High` |
+| 4 | Marked unavailable with failure reason | All layers exhausted | `source: unavailable`, dashboard renders "data unavailable today (reason)" |
+
+**Why this works on GitHub Actions** (where yfinance normally fails):
+
+1. **`curl_cffi` impersonates Chrome's TLS fingerprint** — Yahoo's JA3-hash check sees us as a real browser, not a CI scraper
+2. **24-hour cache means most cron runs don't hit Yahoo at all** — short interest publishes biweekly, so re-fetching same-day is wasted
+3. **Retry with jittered backoff** — transient 429s recover; jitter prevents synchronized retries when multiple workers are throttled
+4. **Inter-ticker delay (5s ± 20% jitter)** — avoids the burst pattern that triggers rate-limiters
+5. **03:00 UTC cron schedule** — quietest globally; already configured in `.github/workflows/nightly.yml`
+
+**Why this is investor-grade even when yfinance dies**: the failover
+chain degrades gracefully. Stale data (Layer 2) is still useful for a
+biweekly metric. Qualitative float-proxy (Layer 3) preserves the
+squeeze-risk signal. Layer 4 marks the gap honestly rather than
+crashing or silently returning bad data.
+
+Public API:
+```python
+from src.data_sources.short_interest import fetch, fetch_batch
+result = fetch("NVDA", current_float_shares=24_500_000_000)
+batch = fetch_batch(["NVDA", "AMAT", "IONQ"], float_shares_lookup={"NVDA": 24.5e9, ...})
+```
+
+Smoke test:
+```bash
+python -m src.data_sources.short_interest NVDA AMAT IONQ
+python -m src.data_sources.short_interest NVDA --no-cache  # force fresh yfinance call
+```
 
 ---
 
