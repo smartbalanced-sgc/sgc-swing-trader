@@ -47,15 +47,16 @@ NYSE_CAL = mcal.get_calendar("XNYS")
 # NOT the legacy /api/v3/{endpoint}/{SYMBOL}?apikey={KEY} pattern, which
 # returns 403 for Starter-plan keys.
 FMP_BASE = "https://financialmodelingprep.com/stable"
-FETCH_TIMEOUT_SEC = 30
-HISTORY_YEARS = 5
-
 CACHE_DIR = config.DATA_DIR / "cache"
 
-FRESHNESS_HARD_FAIL_DAYS = 5
-COMPLETENESS_HARD_FAIL_RATIO = 0.05
-SPLIT_DIV_WARN_RETURN = 0.30
-VOLUME_WARN_RATIO = 0.05
+# Thresholds — all sourced from config/thresholds.yml so we can calibrate
+# without code changes (see src/config.py).
+FETCH_TIMEOUT_SEC = config.THRESHOLDS.engine.fetch_timeout_sec
+HISTORY_YEARS = config.THRESHOLDS.engine.history_years
+FRESHNESS_HARD_FAIL_DAYS = config.THRESHOLDS.data_sanity.freshness_hard_fail_days
+COMPLETENESS_HARD_FAIL_RATIO = config.THRESHOLDS.data_sanity.completeness_hard_fail_ratio
+SPLIT_DIV_WARN_RETURN = config.THRESHOLDS.data_sanity.split_div_warn_return
+VOLUME_WARN_RATIO = config.THRESHOLDS.data_sanity.volume_warn_ratio
 
 _SEVERITY_RANK = {"ok": 0, "warn": 1, "fail": 2}
 

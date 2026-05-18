@@ -92,7 +92,7 @@ def classify(price_data: dict) -> dict:
     Caller decides what to do with the measured tier — compare against
     the watchlist anchor, surface on dashboard, etc.
     """
-    cfg = config.TIER_CLASSIFIER
+    cfg = config.THRESHOLDS.tier_classifier
     prices = price_data.get("prices") or []
     notes: list[str] = []
 
@@ -100,25 +100,22 @@ def classify(price_data: dict) -> dict:
     if df.empty:
         raise ValueError(f"no usable price bars for {price_data.get('ticker')}")
 
-    vol_annualized = _realized_vol_annualized(df, cfg["vol_window_days"])
-    vol_of_vol = _vol_of_vol(df, cfg["vol_window_days"], cfg["vol_of_vol_inner_window"])
-    adv_usd = _avg_daily_dollar_volume(df, cfg["adv_window_days"])
+    vol_annualized = _realized_vol_annualized(df, cfg.vol_window_days)
+    vol_of_vol = _vol_of_vol(df, cfg.vol_window_days, cfg.vol_of_vol_inner_window)
+    adv_usd = _avg_daily_dollar_volume(df, cfg.adv_window_days)
     history_days = len(df)
 
-    # If we have fewer bars than the 90d window asks for, every metric
-    # is still computable (pandas handles short windows gracefully) but
-    # the result is noisy. Flag it.
-    if history_days < cfg["vol_window_days"]:
+    if history_days < cfg.vol_window_days:
         notes.append(
             f"only {history_days} bars available; vol metrics computed on "
-            f"a shorter window than the {cfg['vol_window_days']}-day target"
+            f"a shorter window than the {cfg.vol_window_days}-day target"
         )
 
     props = {
-        "vol_annualized":  {"value": vol_annualized,  "tier": _score_upper_bound(vol_annualized,  cfg["vol_annualized_bounds"])},
-        "vol_of_vol":      {"value": vol_of_vol,      "tier": _score_upper_bound(vol_of_vol,      cfg["vol_of_vol_bounds"])},
-        "adv_usd":         {"value": adv_usd,         "tier": _score_lower_bound(adv_usd,         cfg["adv_usd_lower_bounds"])},
-        "history_days":    {"value": history_days,    "tier": _score_lower_bound(history_days,    cfg["history_days_lower_bounds"])},
+        "vol_annualized":  {"value": vol_annualized,  "tier": _score_upper_bound(vol_annualized,  cfg.vol_annualized_bounds)},
+        "vol_of_vol":      {"value": vol_of_vol,      "tier": _score_upper_bound(vol_of_vol,      cfg.vol_of_vol_bounds)},
+        "adv_usd":         {"value": adv_usd,         "tier": _score_lower_bound(adv_usd,         cfg.adv_usd_lower_bounds)},
+        "history_days":    {"value": history_days,    "tier": _score_lower_bound(history_days,    cfg.history_days_lower_bounds)},
     }
 
     decisive_name, decisive_tier = max(
@@ -231,22 +228,24 @@ def _avg_daily_dollar_volume(df: pd.DataFrame, window: int) -> float:
     return 0.0 if pd.isna(dollar_vol) else float(dollar_vol)
 
 
-def _score_upper_bound(value: float, bounds: dict[str, float]) -> str:
+def _score_upper_bound(value: float, bounds) -> str:
     """Score a metric where SMALLER values are better (vol, vol-of-vol).
-    `bounds` maps tier → inclusive upper bound. Returns the first tier
-    whose upper bound the value clears."""
+    `bounds` is a SimpleNamespace with .A/.B/.C upper bounds (loaded
+    from thresholds.yml). Returns the first tier whose upper bound the
+    value clears."""
     for tier in _TIER_ORDER:
-        if value <= bounds[tier]:
+        if value <= getattr(bounds, tier):
             return tier
     return "C"
 
 
-def _score_lower_bound(value: float, bounds: dict[str, float]) -> str:
+def _score_lower_bound(value: float, bounds) -> str:
     """Score a metric where LARGER values are better (ADV, history).
-    `bounds` maps tier → inclusive lower bound. Returns the first tier
-    whose lower bound the value meets."""
+    `bounds` is a SimpleNamespace with .A/.B/.C lower bounds (loaded
+    from thresholds.yml). Returns the first tier whose lower bound the
+    value meets."""
     for tier in _TIER_ORDER:
-        if value >= bounds[tier]:
+        if value >= getattr(bounds, tier):
             return tier
     return "C"
 

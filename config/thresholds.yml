@@ -1,0 +1,239 @@
+# SGC Swing Trader — calibratable thresholds
+#
+# Every numeric threshold the engine uses lives here. Code reads these via
+# src.config; nothing else is allowed to hard-code a threshold value. To
+# tune the system you edit this file and commit — no code changes needed.
+#
+# Plain-English notes on what each section controls live alongside the
+# values. If you change a value, write a one-liner in the commit message
+# explaining WHY (the audit trail matters as much as the change itself).
+
+# ---------- Engine-level ----------
+
+engine:
+  # Years of history to pull from FMP per ticker.
+  history_years: 5
+  # HTTP timeout for FMP requests, seconds.
+  fetch_timeout_sec: 30
+  # Number of simulated price paths per (ticker, horizon) for Monte Carlo.
+  mc_paths: 50000
+
+# Two horizons analyzed in parallel every run. The dashboard shows both;
+# verdicts that agree across horizons are stronger than horizon-specific.
+horizons:
+  primary_days: 30
+  secondary_days: 60
+
+# ---------- Step 1 — Data fetch & sanity ----------
+
+data_sanity:
+  # HARD FAIL: last bar is older than this many trading days.
+  # Running on a frozen tape is worse than not running.
+  freshness_hard_fail_days: 5
+  # HARD FAIL: missing bars exceed this fraction of expected trading days.
+  completeness_hard_fail_ratio: 0.05
+  # WARN: any single-day return larger than this is flagged for human
+  # review (real catastrophe OR unadjusted corporate action OR data
+  # corruption — engine doesn't auto-decide).
+  split_div_warn_return: 0.30
+  # WARN: zero-volume bars exceed this fraction of the window.
+  volume_warn_ratio: 0.05
+
+# ---------- §4.2 Measurement-driven tier classifier ----------
+#
+# Each ticker scored against four observable properties. Worst-of rule:
+# any property scoring C drags the measured tier to C.
+
+tier_classifier:
+  vol_window_days: 90
+  vol_of_vol_inner_window: 20
+  adv_window_days: 20
+  # Upper bounds — value ≤ bound goes into that tier. .inf = catch-all.
+  vol_annualized_bounds:
+    A: 0.35
+    B: 0.65
+    C: .inf
+  vol_of_vol_bounds:
+    A: 0.15
+    B: 0.30
+    C: .inf
+  # ADV bounds reversed (higher = better, so A needs the highest ADV).
+  # Interpretation: ADV ≥ bound qualifies for that tier.
+  # PyYAML scientific notation needs an explicit sign: 5.0e+8 = 500,000,000.
+  adv_usd_lower_bounds:
+    A: 5.0e+8
+    B: 5.0e+7
+    C: 0.0
+  history_days_lower_bounds:
+    A: 750
+    B: 250
+    C: 0
+
+# ---------- §5.1 Conviction engine ----------
+#
+# Three-layer model:
+#   Layer 1 — EDGE: does the math say yes? (P(target)-P(stop) + EV)
+#   Layer 2 — CONFIDENCE: should we trust the math? (multiplier on edge)
+#   Layer 3 — VETOES: specific reasons to back off (label override)
+#
+# Final conviction = edge_score × confidence_multiplier
+# Verdict label = derived from final conviction, modified by any Layer 3
+# veto that fires (vetoes change the label, not the number).
+
+conviction:
+
+  # Layer 1 — edge.
+  edge:
+    # Lottery filter: if P(target) - P(stop) is non-positive, edge = 0
+    # regardless of EV. Eliminates trades where huge upside × tiny
+    # probability inflates EV on a structurally bad bet.
+    lottery_filter_min_prob_diff: 0.0
+    # Past the lottery filter: ev-weighted with a token probability term.
+    # Swing trading is asymmetric-payoff-by-construction, so lean EV.
+    ev_weight: 0.70
+    probability_weight: 0.30
+    # EV is normalized as "expected return / stop distance" (units of
+    # risk). Cap at this multiplier so extreme asymmetry (which usually
+    # signals model error) doesn't dominate the score.
+    ev_cap_units_of_risk: 3.0
+
+  # Layer 2 — confidence haircuts. Multiplicative: each haircut reduces
+  # the confidence multiplier by its fraction. (1 - 0.30) × (1 - 0.10) ×
+  # (1 - 0.20) = 0.504 worst case. Confidence multiplier can never
+  # exceed 1.0 (full trust is the baseline, not bonus).
+  haircuts:
+    # MC ↔ PDE disagreement — graduated. Two methods (random simulation,
+    # deterministic PDE) computing the same quantity should agree.
+    # Disagreement = at least one method being stretched by unusual
+    # conditions. Don't know which, so haircut both.
+    mc_pde_disagreement:
+      low_band:   {min_pp_delta: 5.0,  max_pp_delta: 10.0,    haircut: 0.30}
+      high_band:  {min_pp_delta: 10.0, max_pp_delta: .inf,    haircut: 0.50}
+    # Trajectory instability — verdict flip-flopping across recent
+    # snapshots is itself evidence the signal is noisy.
+    trajectory_instability:
+      lookback_nights: 5
+      min_direction_changes: 3
+      haircut: 0.10
+    # Tier mismatch — sustained §4.2 watchlist-vs-measured disagreement
+    # means the pipeline ran the wrong priors for the current behavior.
+    tier_mismatch:
+      min_consecutive_nights_of_disagreement: 5
+      haircut: 0.20
+
+  # Layer 3 — vetoes. Change the verdict LABEL based on conditions,
+  # independent of the conviction score number.
+  vetoes:
+    # The score above which ENTER is the default label (assuming no
+    # veto). Below: WAIT (close to threshold) or SKIP (far below).
+    enter_score_threshold: 0.70
+    # Hysteresis band below threshold — between this and the threshold
+    # the verdict is WAIT; below this it's SKIP.
+    wait_score_floor: 0.55
+
+    # Catalyst proximity (Layer 2 haircut + Layer 3 ENTER veto).
+    # The two effects address different problems:
+    #   - haircut: math becomes unreliable near binary events (3-5×
+    #     normal vol on event day, bimodal return distribution)
+    #   - in-horizon veto: don't take a NEW trade that goes through a
+    #     known binary event — wait, see how the stock reacts, enter
+    #     with more information
+    catalyst:
+      # Distance in trading sessions → confidence haircut.
+      # Bands are evaluated in order; first match wins.
+      proximity_haircut_bands:
+        - {max_sessions: 1, haircut: 0.40}
+        - {max_sessions: 3, haircut: 0.20}
+        - {max_sessions: 5, haircut: 0.10}
+      # In-horizon veto: ENTER → WAIT if catalyst falls inside the
+      # horizon and user is in 'watching' state. 30d and 60d evaluated
+      # independently. HOLD never gets a catalyst veto.
+      in_horizon_veto:
+        enabled: true
+
+    # Regime override. Regime probability already feeds MC drift (Layer
+    # 1 contribution), but persistent downtrend/crisis regimes
+    # systematically beat MC's mean-reverting volatility model — so an
+    # additional Layer-3 ENTER veto catches what the math underestimates.
+    regime:
+      # Names match the §2 step-2 regime detector states.
+      enter_veto_regimes: [downtrend, crisis]
+      # Below this confidence the regime call isn't firm enough — drift
+      # modulation alone is sufficient.
+      enter_veto_min_confidence: 0.70
+      # Regime FLIP from positive → negative on an entered position
+      # triggers TRIM (Layer 3 for HOLD-mode users).
+      trim_on_flip_for_entered: true
+
+    # Fair value extremes.
+    fair_value:
+      # Price ≥ FV mean + N × σ → SKIP for watching (greater-fool risk).
+      enter_skip_premium_sigmas: 2.0
+      # Same trigger for entered → TRIM (take profit at the extreme).
+      trim_for_entered_premium_sigmas: 2.0
+
+    # Liquidity veto — Tier C only. Below this ADV, SKIP regardless of
+    # edge. This is the §4 catalyst-override "bare-minimum guard."
+    liquidity_tier_c_only:
+      min_adv_usd: 5.0e+6   # $5M average daily dollar volume floor
+
+# ---------- Step 2 — Regime detector ----------
+
+regime:
+  # Five regime states, names chosen for narrative consistency with the
+  # v17 dip engine. Plain-English meanings:
+  #   uptrend_quiet  — price trending up, normal day-to-day moves
+  #   uptrend_noisy  — trending up but with elevated daily swings
+  #   downtrend      — sustained downward trend
+  #   sideways       — range-bound, no clear direction
+  #   crisis         — extreme volatility, breakdown of normal regime structure
+  states: [uptrend_quiet, uptrend_noisy, downtrend, sideways, crisis]
+  # Daily drift assumption (annualized return) per regime — fed into MC.
+  # Calibrated to long-run averages; positive in uptrends, negative in
+  # downtrends, near zero in sideways/crisis.
+  drift_per_regime:
+    uptrend_quiet:  0.15
+    uptrend_noisy:  0.18
+    downtrend:     -0.20
+    sideways:       0.05
+    crisis:         0.00
+
+# ---------- Materiality (mirrors v17 dip engine) ----------
+
+materiality:
+  # Predicted dip must exceed this to count as "worth waiting for."
+  dip_pct_threshold: 0.03
+  # Predicted rally must exceed this to register as a meaningful rally target.
+  rally_pct_threshold: 0.03
+
+# ---------- Step 7 — MC ↔ PDE cross-check ----------
+
+cross_check:
+  # P(target) disagreement tolerance — within this many percentage
+  # points, the two methods are "in agreement" (no haircut).
+  p_target_agreement_tolerance_pp: 5.0
+  # EV agreement tolerance as a fraction (5% relative).
+  ev_agreement_tolerance_pct: 0.05
+
+# ---------- Conviction trajectory (§7) ----------
+
+trajectory:
+  # Window for the rolling smoother that classifies trajectory as
+  # rising / stable / decaying / flip-flopping.
+  smoothing_window_nights: 5
+  # Per-night slope (in score units) above which the trajectory is "rising".
+  rising_threshold_slope: 0.01
+  # Below this, "decaying".
+  decaying_threshold_slope: -0.01
+
+# ---------- Dashboard display ----------
+
+dashboard:
+  # Daily-path expandable: how many forward sessions to render.
+  daily_path_session_count: 60
+  # Conviction trajectory sparkline length.
+  trajectory_sparkline_nights: 30
+  # How many recent news headlines per ticker on the catalyst panel.
+  news_headlines_max: 3
+  # How many past earnings reactions to display.
+  earnings_reactions_lookback: 4
