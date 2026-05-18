@@ -150,8 +150,10 @@ which priors, weights, and guards the pipeline applies.
   faster), GARCH confidence intervals widened to account for higher
   volatility-of-volatility — how much the daily move-size itself swings
   around.
-- **Examples:** ANET, SMCI, CRWD, PLTR, MRVL
-- **v1 representative:** **ANET**
+- **Examples:** AMAT, ANET, SMCI, CRWD, MRVL
+- **v1 representative:** **AMAT** — semi-cap-equipment, mid-to-elevated
+  vol, mature data history, AI-capex secular beneficiary. Complements
+  NVDA's chips-side exposure with the equipment-side of the same theme.
 
 ### Group C — Small-cap catalyst-driven
 - **Characteristics:** high volatility, thin tape (few shares trading per
@@ -163,16 +165,71 @@ which priors, weights, and guards the pipeline applies.
   ("fat-tailed" means extreme moves happen more often than a normal bell
   curve predicts, which matches small-cap reality). Dashboard surfaces a
   prominent low-liquidity warning on every Group C ticker.
-- **v1 representative:** **SNDK** — doubles as the regression test: our
-  v1 output for SNDK must structurally match the existing dip-engine
-  SNDK analysis (with swing-trader tweaks: dual horizon, two-mode verdict,
-  conviction trajectory, per-user verdict).
+- **v1 representative:** **IONQ** — quantum-computing pure-play, very
+  high realized vol (frequently 80-110% annualized), narrative-driven
+  with near-zero revenue, post-SPAC ~5y history. Exactly the kind of name
+  the fat-tailed priors and low-history adjustments are designed for.
+  *(The previously-proposed SNDK regression test against the legacy
+  dip-engine output moves to a separate research artifact under
+  `research/` — it is not a live watchlist ticker.)*
 
-**Tier inference for new tickers** (when added via the conversational
-interface): Claude looks up the ticker's market cap and proposes a tier
-based on rough thresholds (A: >$200B, B: $10-200B, C: <$10B). The user
-can override. Exact threshold values are an open question for the
-building conversation (§13).
+### 4.1 Tier inference for new tickers
+
+When a ticker is added via the conversational interface, Claude proposes
+a tier using **both** a coarse market-cap heuristic and a measurement-
+driven classifier (§4.2). The user can override.
+
+Coarse cap heuristic (rough defaults):
+- A: market cap > $200B
+- B: $10B ≤ market cap ≤ $200B
+- C: market cap < $10B
+
+Exact threshold values remain an open question for ongoing calibration
+(§13).
+
+### 4.2 Measurement-driven tier classifier
+
+The watchlist's human-set `tier:` field is the **anchor** — it drives the
+actual statistical treatment in the pipeline (which priors, weights, and
+guards apply). The classifier is **advisory in v1.0**: it runs each
+nightly cycle, scores each ticker against observable behavioral
+properties, and surfaces agreement or divergence on the dashboard.
+
+This is "substance over form": the watchlist holds a human-chosen label,
+but the data drives a parallel measurement so we can spot when the label
+no longer matches behavior (e.g. a B-anchored ticker whose realized vol
+has migrated into C territory).
+
+Behavioral properties scored per ticker:
+
+| Property | Plain English | Tier A | Tier B | Tier C |
+|---|---|---|---|---|
+| 90-day realized volatility (annualized) | Typical year-over-year price swing as a fraction of price, computed from daily log-returns × √252 | < 35% | 35–65% | > 65% |
+| 90-day volatility-of-volatility | How much the rolling 20-day vol itself swings around (std-dev of the 20d rolling vol over the 90d window) | < 0.15 | 0.15–0.30 | > 0.30 |
+| 20-day average daily dollar volume (ADV) | Average $-amount traded per day over the last 20 sessions = mean(close × volume) | > $500M | $50M–$500M | < $50M |
+| Days of clean history | Number of clean daily bars available after sanity checks | > 750 (≈ 3y) | > 250 (≈ 1y) | ≤ 250 |
+
+**Classification rule:** worst-of. Each property scores A/B/C
+independently; the ticker's measured tier is the *most conservative*
+(toward C) of the four. Bias is toward more warnings, not fewer.
+
+**Policy in v1.0:** anchor wins for the math. Classifier output is
+surfaced as a dashboard column ("watchlist tier" vs "measured tier") with
+an agree/disagree indicator. Disagreement is a prompt for the humans
+(Aidy/Jesse) to re-anchor via the conversational interface, not an
+automatic re-label.
+
+**Policy for v1.x (deferred):** flip to behavior-wins-with-explicit-pin
+once we've watched the classifier behave for a few weeks across all three
+tiers and have confidence in its calibration. Thresholds themselves are
+calibratable in `src/config.py`.
+
+The classifier lives at `src/tier_classifier.py` and runs after step 1
+(data fetch), needing only raw daily prices and volumes. It does NOT
+depend on the GARCH model in step 4 — the 90-day realized vol used here
+is a simple historical estimator (std-dev of log-returns × √252), which
+is good enough for tier-bucketing even though GARCH-derived forward vol
+is needed for the actual statistical machinery downstream.
 
 ---
 
@@ -378,6 +435,7 @@ sgc-swing-trader/
 │   │   ├── monte_carlo.py
 │   │   ├── analytic_verifier.py     # the PDE second-method
 │   │   └── verdict.py
+│   ├── tier_classifier.py           # measurement-driven tier advisory (§4.2)
 │   ├── groups.py                    # group definitions + per-group weights
 │   ├── snapshot.py                  # snapshot read/write + conviction smoother
 │   ├── dashboard.py                 # HTML generation
@@ -401,9 +459,13 @@ the schema validator.
 
 | Ticker | Group | Why this one |
 |---|---|---|
-| **NVDA** | A — mega-cap quality | High enough vol to be interesting, deep liquidity, mature data history, genuinely actionable AI infra leader |
-| **ANET** | B — mid-cap growth | Sector momentum (AI networking), real earnings catalysts, mid-cap to test catalyst weighting, liquid enough to pass guards |
-| **SNDK** | C — small-cap catalyst | Post-spinoff catalyst, small-cap to test override path, **and** doubles as regression test against the dip-engine SNDK analysis |
+| **NVDA** | A — mega-cap quality | Deep liquidity, mature data, genuinely actionable AI infra leader. Mega-cap mature behavior — the canonical A profile. |
+| **AMAT** | B — mid-cap growth | Semi-cap-equipment giant, mid-to-elevated vol, mature data, AI-capex secular tailwind. Complements NVDA's chips-side exposure with the equipment-side of the same theme. |
+| **IONQ** | C — small-cap catalyst | Quantum-computing pure-play, narrative-driven, very high realized vol, near-zero revenue, post-SPAC ~5y history. Textbook fat-tailed catalyst-or-bust name — exactly the C-tier behavioral profile. |
+
+Selection rationale: three names, three genuinely different statistical
+characters — so each branch of the per-tier statistical treatment (§4)
+gets exercised on a live name from v1 launch.
 
 **Initial state at v1 launch:** both Aidy and Jesse start as `watching`
 on all three tickers. No entered positions on day one. Real entries
@@ -414,21 +476,21 @@ Seed `data/watchlist.yml`:
 ```yaml
 NVDA:
   tier: A
-  notes: "AI infra leader"
+  notes: "AI infra leader — mega-cap mature, deep liquidity, A-tier representative"
   holders:
     aidy: {state: watching}
     jesse: {state: watching}
 
-ANET:
+AMAT:
   tier: B
-  notes: "AI networking, sector momentum"
+  notes: "Semi-cap-equipment, AI-capex beneficiary — mid-to-elevated vol, mature data, B-tier representative"
   holders:
     aidy: {state: watching}
     jesse: {state: watching}
 
-SNDK:
+IONQ:
   tier: C
-  notes: "Post-spinoff catalyst, regression test vs dip-engine reference"
+  notes: "Quantum pure-play, narrative-driven fat-tailed catalyst — high vol, post-SPAC ~5y history, C-tier representative"
   holders:
     aidy: {state: watching}
     jesse: {state: watching}
@@ -470,7 +532,14 @@ SNDK:
   dates?)
 - Plain-English thesis generation method (template-driven, or small LLM
   call?)
-- Exact market-cap thresholds for tier inference (A/B/C boundaries)
+- Exact market-cap thresholds for tier inference (A/B/C boundaries) —
+  the §4.2 measurement-driven classifier exists alongside the cap-based
+  heuristic; the question now is how aggressive the eventual
+  behavior-wins flip in v1.x should be (does it auto-warn at first
+  divergence, or require N consecutive sessions of divergence?)
+- Calibration of the §4.2 classifier thresholds — current bands (vol
+  35%/65%, vol-of-vol 0.15/0.30, ADV $500M/$50M, history 750/250 days)
+  are first-principles defaults, not empirically tuned
 - Breadth of read-only query intents in the conversational interface
 - Concurrent-edit handling: v1 assumes rare collisions self-heal via
   pull-rebase-retry, but if collisions prove common we may need a simple
@@ -485,8 +554,15 @@ The v1 build is "done" when:
   nights
 - Dashboard renders all 3 tickers with full per-ticker reports
 - MC and PDE both run and agree (or flag disagreement) for all 3 tickers
-- SNDK's v1 output structurally matches the dip-engine reference (with
-  swing-trader tweaks) — manual review by Jesse + Aidy
+- IONQ's v1 output exercises the C-tier statistical treatment end-to-end
+  (fat-tailed MC priors fire, low-liquidity warning renders, vol forecast
+  uses widened confidence bands) — manual review by Jesse + Aidy.
+  *(The previously-planned SNDK regression test against the legacy
+  dip-engine output is deferred to a separate research artifact, not a
+  v1 DoD criterion.)*
+- The §4.2 measurement-driven tier classifier runs cleanly on all 3
+  watchlist tickers and surfaces watchlist-vs-measured agreement on the
+  dashboard summary table
 - Conversational interface handles all five core intents end-to-end:
   add, remove, bought, sold, query — including the identity question,
   tier inference for new tickers, snapshot-derived target/stop defaults,
