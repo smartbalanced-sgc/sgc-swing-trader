@@ -2,3 +2,7 @@ pyyaml>=6.0
 requests>=2.31
 pandas>=2.0
 pandas_market_calendars>=4.4
+# yfinance is used for short-interest data + options-implied vol —
+# fills the FMP Starter gaps documented in docs/FMP_ENDPOINTS.md.
+# Same multi-source pattern as charter §3.3.
+yfinance>=0.2
