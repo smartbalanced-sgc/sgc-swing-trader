@@ -163,8 +163,16 @@ section.ticker-card > .card-body { padding: 4px 22px 22px; }
 .verdict-EXIT  { background: #fecaca; color: #7f1d1d; }
 .verdict-EM    { background: #f3f4f6; color: var(--muted); }
 
-/* sub-panels within a ticker card */
-.subpanel { margin: 16px 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
+/* sub-panels within a ticker card — consistent card-like styling for
+   both <div> (pending placeholders) and <details> (collapsibles) */
+.subpanel {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fafaf9;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
 .subpanel.pending { background: var(--pending-bg); }
 .subpanel > .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .subpanel > .head .title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-soft); }
@@ -321,12 +329,20 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .action-group .copy-paste::before { content: "$ "; color: #9ca3af; }
 
 /* ---------- collapsible subpanel pattern ---------- */
-details.subpanel { padding: 0; }
-details.subpanel > summary { padding: 12px 16px; cursor: pointer; list-style: none; transition: background 0.15s; }
-details.subpanel > summary:hover { background: #fafafa; }
+details.subpanel { padding: 0; transition: box-shadow 0.15s, border-color 0.15s; }
+details.subpanel:hover { border-color: var(--accent); box-shadow: 0 2px 6px rgba(29,78,216,0.08); }
+details.subpanel[open] { background: var(--panel); border-color: var(--border-strong); }
+details.subpanel > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+details.subpanel[open] > summary { border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--border); background: #fafaf9; }
 details.subpanel > summary::-webkit-details-marker { display: none; }
 details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; gap: 8px 14px; }
-details.subpanel > .body { padding: 0 16px 14px; }
+details.subpanel > .body { padding: 14px 16px; background: var(--panel); border-radius: 0 0 8px 8px; }
 /* Explicit Expand / Collapse affordance — always visible cue. */
 details.subpanel > summary .expand-cue {
   display: inline-block;
