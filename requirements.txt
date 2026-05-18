@@ -1,7 +1,14 @@
 pyyaml>=6.0
 requests>=2.31
-pandas>=2.0
-pandas_market_calendars>=4.4
+# numpy<2 keeps us compatible with pandas<2.2 and the shared dip-engine
+# venv (pandas 2.0.3 + scipy 1.11.2 both pin numpy<2). Without this pin,
+# pandas_market_calendars 5.x pulls numpy 2.x and breaks every other
+# package's binary compatibility (numpy.dtype size changed ABI error).
+numpy>=1.21,<2
+pandas>=2.0,<2.2
+# pandas_market_calendars 5.x requires exchange-calendars 4.x which
+# requires numpy>=2 — pin to the 4.x line which works with numpy<2.
+pandas_market_calendars>=4.4,<5
 # yfinance is used for short-interest data + options-implied vol —
 # fills the FMP Starter gaps documented in docs/FMP_ENDPOINTS.md.
 # Same multi-source pattern as charter §3.3.
