@@ -1,17 +1,30 @@
-# Nightly engine run — cron + run + commit + deploy.
+# Nightly engine run — cron + run + commit-snapshots + Pages deploy.
 #
-# Currently set to manual-trigger only (workflow_dispatch). The scheduled
-# cron line is intentionally absent until the engine actually produces
-# output worth scheduling. See docs/V1_SPEC.md §9 — target schedule is
-# ~03:00 UTC nightly once the pipeline is real.
+# Schedule: 03:00 UTC daily. That's ~4-5 hours after US market close
+# on a regular trading day, which is enough buffer for FMP's end-of-day
+# bars to be available. (Spec §9.)
+#
+# GitHub Pages serves docs/ from the default branch — configure that
+# once in repo Settings → Pages (Source: "Deploy from a branch",
+# Branch: "main" /docs). No deploy action needed; this workflow just
+# commits the updated docs/index.html and GitHub Pages picks it up.
+#
+# Secrets required: FMP_API_KEY  (repo → Settings → Secrets and
+# variables → Actions). Without it, the engine fails fast at step 1.
 
 name: nightly
 
 on:
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -19,11 +32,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # We need write access for the commit-back step. Default
+          # actions/checkout uses GITHUB_TOKEN, which has it via the
+          # workflow-level `permissions: contents: write`.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -33,6 +53,24 @@ jobs:
       - name: Validate watchlist
         run: python tools/validate_watchlist.py
 
-      # The engine run, commit-snapshots, and deploy-pages steps will be
-      # added as the pipeline comes online. For now this workflow only
-      # proves the harness wiring + watchlist schema validation work.
+      - name: Run engine
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: python -m src.main
+
+      - name: Commit snapshots and dashboard
+        run: |
+          git config user.name  "sgc-swing-trader-bot"
+          git config user.email "bot@users.noreply.github.com"
+          # Stage only the engine outputs — never anything else, even
+          # if something else changed unexpectedly.
+          git add data/snapshots docs/index.html
+          if git diff --cached --quiet; then
+            echo "no engine-output changes this run; nothing to commit"
+            exit 0
+          fi
+          RUN_DATE=$(date -u +%Y-%m-%d)
+          git commit -m "Nightly run ${RUN_DATE} — snapshots + dashboard"
+          # Push to whichever branch the workflow was triggered on. For
+          # scheduled triggers that's always the default branch.
+          git push origin HEAD:${GITHUB_REF_NAME}

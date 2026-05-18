@@ -7,5 +7,5 @@ premium-or-discount the market price is trading at relative to that range.
 """
 
 
-def estimate(ticker: str, fundamentals: dict) -> dict:
+def estimate(ticker: str, price_data: dict) -> dict:
     raise NotImplementedError

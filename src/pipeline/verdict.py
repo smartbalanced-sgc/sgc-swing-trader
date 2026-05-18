@@ -14,5 +14,14 @@ step branches per user — each user's entry/target/stop reframes the math.
 """
 
 
-def synthesize(ticker: str, holders: dict, analysis: dict, horizon: int) -> dict:
+def synthesize(ticker: str, snap: dict, user: str, state: dict) -> dict:
+    """Produce one user's verdict for one ticker at both 30d and 60d
+    horizons. `state` is the user's watchlist entry (state == 'watching'
+    or 'entered', with optional entry/target/stop fields when entered).
+    `snap` contains the upstream analysis (regime, vol, fair_value,
+    monte_carlo, analytic_verifier).
+
+    Returns {"30d": {"verdict": ..., "rationale": ...},
+             "60d": {"verdict": ..., "rationale": ...}}.
+    """
     raise NotImplementedError

@@ -11,5 +11,10 @@ signal is treated as low-confidence.
 """
 
 
-def verify(ticker: str, vol_path: dict, regime: dict, horizon: int) -> dict:
+def verify(ticker: str, snap: dict) -> dict:
+    """Reads upstream outputs (vol_path, regime) from the in-progress
+    snapshot and solves the Fokker-Planck PDE for both horizons. Returns
+    {"30d": {...}, "60d": {...}} with the same per-horizon keys as the
+    Monte Carlo simulator so the dashboard can run a side-by-side
+    agreement check."""
     raise NotImplementedError

@@ -11,5 +11,8 @@ horizon-end prices.
 """
 
 
-def simulate(ticker: str, vol_path: dict, regime: dict, tier: str, horizon: int) -> dict:
+def simulate(ticker: str, snap: dict) -> dict:
+    """Reads upstream outputs (vol_path, regime, tier_anchor) from the
+    in-progress snapshot and simulates 50,000 paths per horizon. Returns
+    {"30d": {...}, "60d": {...}} keyed by horizon."""
     raise NotImplementedError

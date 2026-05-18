@@ -7,5 +7,5 @@ percent move).
 """
 
 
-def detect(ticker: str, tier: str) -> dict:
+def detect(ticker: str, price_data: dict, tier: str) -> dict:
     raise NotImplementedError
