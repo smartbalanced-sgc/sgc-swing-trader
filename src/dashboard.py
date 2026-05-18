@@ -316,22 +316,43 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .action-group .ag-targets .val { font-family: ui-monospace, monospace; font-weight: 600; }
 .action-group .ag-targets .val .pct { color: var(--muted); font-weight: 400; margin-left: 4px; }
 .action-group .ag-noaction { font-size: 12.5px; color: var(--text-soft); font-style: italic; padding: 4px 0; }
-.action-group .copy-paste { background: #1f2937; color: #f3f4f6; padding: 5px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; margin-top: 8px; display: inline-block; }
+.action-group .cp-hint { font-size: 11.5px; color: var(--text-soft); margin-top: 8px; font-style: italic; }
+.action-group .copy-paste { background: #1f2937; color: #f3f4f6; padding: 5px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; margin-top: 4px; display: inline-block; }
 .action-group .copy-paste::before { content: "$ "; color: #9ca3af; }
 
 /* ---------- collapsible subpanel pattern ---------- */
 details.subpanel { padding: 0; }
-details.subpanel > summary { padding: 12px 16px; cursor: pointer; list-style: none; }
+details.subpanel > summary { padding: 12px 16px; cursor: pointer; list-style: none; transition: background 0.15s; }
+details.subpanel > summary:hover { background: #fafafa; }
 details.subpanel > summary::-webkit-details-marker { display: none; }
-details.subpanel > summary::before { content: "▸ "; color: var(--muted); }
-details.subpanel[open] > summary::before { content: "▾ "; }
-details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; }
+details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; gap: 8px 14px; }
 details.subpanel > .body { padding: 0 16px 14px; }
+/* Explicit Expand / Collapse affordance — always visible cue. */
+details.subpanel > summary .expand-cue {
+  display: inline-block;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: white;
+}
+details.subpanel:hover > summary .expand-cue { background: var(--accent); color: white; }
+details.subpanel[open] > summary .expand-cue { background: #f4f4f5; color: var(--text-soft); border-color: var(--border-strong); }
+details.subpanel[open]:hover > summary .expand-cue { background: var(--text-soft); color: white; border-color: var(--text-soft); }
+details.subpanel > summary .expand-cue::before { content: "+ Expand for plain-English details"; }
+details.subpanel[open] > summary .expand-cue::before { content: "− Collapse"; }
 
 /* ---------- engine read panel (always visible) ---------- */
 .engine-read-panel { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px 14px; margin: 14px 0; }
 .engine-read-panel .erp-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #78350f; margin-bottom: 6px; }
 .engine-read-panel .erp-body { font-size: 13px; line-height: 1.6; color: var(--text); }
+.engine-read-panel .erp-body p { margin: 0 0 10px; }
+.engine-read-panel .erp-body p:last-child { margin-bottom: 0; }
+.engine-read-panel .erp-body strong { color: #78350f; }
 
 /* daily-path table (collapsed by default) */
 .daily-path { font-size: 12.5px; width: 100%; border-collapse: collapse; }
@@ -353,6 +374,30 @@ footer.band p { margin: 4px 0; }
   section.ticker-card > .card-head { gap: 6px 14px; }
   section.ticker-card > .card-head .symbol { font-size: 18px; }
   .wrap { padding: 0 14px 60px; }
+
+  /* Price-levels zone: stack on mobile so the detail line gets its own
+     full-width row instead of being squeezed into a narrow column. */
+  .price-levels .pl-zone {
+    grid-template-columns: 24px 1fr max-content;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    row-gap: 2px;
+  }
+  .price-levels .pl-zone .pl-icon  { grid-column: 1; grid-row: 1; }
+  .price-levels .pl-zone .pl-name  { grid-column: 2; grid-row: 1; }
+  .price-levels .pl-zone .pl-value { grid-column: 3; grid-row: 1; }
+  .price-levels .pl-zone .pl-detail {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-left: 32px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  /* Action panel targets: stack label/value on mobile. */
+  .action-group .ag-targets { grid-template-columns: 1fr; gap: 2px; }
+  .action-group .ag-targets .lbl { color: var(--muted); font-size: 11.5px; }
 }
 """
 
@@ -432,6 +477,12 @@ def _render_header(payload: dict) -> str:
 
     err_html = f"<span class='pill pill-fail'>{n_err} run error(s)</span>" if n_err else ""
 
+    # Claude API run-cost: read tokens-consumed from the run payload
+    # (populated by main.py once LLM calls are wired) and convert to
+    # USD using the config/thresholds.yml pricing. Plus an annualized
+    # estimate (cost-per-run × runs_per_year).
+    cost_html = _render_cost(payload)
+
     return f"""
 <header class="band">
   <div class="wrap" style="padding: 0;">
@@ -442,11 +493,46 @@ def _render_header(payload: dict) -> str:
       <span>Started: {html.escape(started)}</span>
       <span>Finished: {html.escape(finished)}</span>
       <span>Market: <strong>{html.escape(str(market_regime))}</strong> (VIX {html.escape(str(vix))})</span>
+      {cost_html}
       {err_html}
     </div>
   </div>
 </header>
 """
+
+
+def _render_cost(payload: dict) -> str:
+    """Render the Claude API run-cost figure for the header meta row.
+
+    The engine populates `payload['cost']` with the tokens-consumed for
+    this run. Cost = tokens × per-million-token pricing from
+    config/thresholds.yml. Annualized = cost × runs_per_year. If no
+    cost data is in the payload (pre-LLM-wiring), we render a 'pending'
+    placeholder so the slot is visible from day one.
+    """
+    pricing = config.THRESHOLDS.claude_pricing
+    cost = payload.get("cost") or {}
+    input_tokens = cost.get("input_tokens")
+    output_tokens = cost.get("output_tokens")
+    if input_tokens is None or output_tokens is None:
+        return (
+            f"<span title='Claude API cost — populated once LLM calls are wired into the pipeline.'>"
+            f"Run cost: <strong>—</strong> <em style='color: var(--muted);'>(pending)</em></span>"
+        )
+    input_cost = (input_tokens / 1_000_000) * pricing.input_per_million_tokens_usd
+    output_cost = (output_tokens / 1_000_000) * pricing.output_per_million_tokens_usd
+    run_cost = input_cost + output_cost
+    annual = run_cost * pricing.runs_per_year
+    # Format with cents-level precision when small.
+    run_str = f"${run_cost:.4f}" if run_cost < 0.10 else f"${run_cost:.3f}"
+    annual_str = f"${annual:.2f}" if annual < 100 else f"${annual:.0f}"
+    return (
+        f"<span title='Claude API cost for this nightly run, with {pricing.runs_per_year}-run annualized estimate. "
+        f"Pricing from config/thresholds.yml ({pricing.model_name}: "
+        f"${pricing.input_per_million_tokens_usd:.2f}/M in, "
+        f"${pricing.output_per_million_tokens_usd:.2f}/M out).'>"
+        f"Run cost: <strong>{run_str}</strong> · est. annual: <strong>{annual_str}</strong></span>"
+    )
 
 
 def _render_system_status(payload: dict) -> str:
@@ -867,11 +953,12 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
             user_label, implicit = _users_display(g, holders)
             user_cls = "users shared" if implicit else "users"
 
-            # Per-state targets / next-action rendering
+            # Per-state targets / next-action rendering. Copy-paste is
+            # generated from verdict below (not read from targets) so
+            # it's always a future-tense template, never a stale string.
             entry_field = targets.get("entry")
             target = targets.get("target")
             stop = targets.get("stop")
-            copy_paste = targets.get("copy_paste") or ""
 
             target_rows = []
             if g["state"] == "watching" and verdict in ("ENTER", "WAIT"):
@@ -907,9 +994,26 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
                     note = "—"
                 targets_html = f"<div class='ag-noaction'>{html.escape(note)}</div>"
 
+            # Copy-paste hint. For ENTER/TRIM/EXIT the copy-paste is a
+            # FUTURE-TENSE template — the user fills in their fill price
+            # after they execute on Trading 212 and pastes the command
+            # back into chat. The <fill> placeholder makes it clear
+            # this is an instruction, not a past-tense statement.
             cp_html = ""
-            if copy_paste and verdict in ("ENTER", "EXIT", "TRIM"):
-                cp_html = f"<div class='copy-paste'>{html.escape(copy_paste)}</div>"
+            cp_hint = ""
+            ticker_sym = snap.get("ticker", "")
+            if verdict == "ENTER":
+                cp_html = f"<div class='copy-paste'>bought {html.escape(ticker_sym)} at &lt;your-fill-price&gt;</div>"
+                cp_hint = "After you buy on Trading 212, paste this into chat with your actual fill price."
+            elif verdict == "EXIT":
+                cp_html = f"<div class='copy-paste'>sold {html.escape(ticker_sym)} at &lt;your-fill-price&gt;</div>"
+                cp_hint = "After you sell, paste this into chat with your actual fill price."
+            elif verdict == "TRIM":
+                cp_html = f"<div class='copy-paste'>sold {html.escape(ticker_sym)} at &lt;your-fill-price&gt; (partial)</div>"
+                cp_hint = "After you trim, paste this into chat with your actual fill price."
+
+            if cp_hint:
+                cp_html = f"<div class='cp-hint'>{cp_hint}</div>{cp_html}"
 
             group_blocks.append(f"""
 <div class='action-group'>
@@ -945,7 +1049,9 @@ def _render_engine_read(snap: dict) -> str:
     """The engine-read recommendation paragraph (always visible).
 
     Extracted from the catalyst panel so the qualitative recommendation
-    is visible without expanding the full catalyst details below.
+    is visible without expanding the full catalyst details below. The
+    recommendation may be multi-paragraph (separated by blank lines);
+    each paragraph renders inside its own <p> for proper spacing.
     """
     cat = snap.get("catalyst")
     if not cat or cat.get("status") == "pending":
@@ -953,12 +1059,32 @@ def _render_engine_read(snap: dict) -> str:
     rec = cat.get("engine_recommendation") or ""
     if not rec:
         return ""
+    paragraphs = [p.strip() for p in rec.split("\n\n") if p.strip()]
+    paragraphs_html = "".join(
+        f"<p>{_render_inline_markdown(p)}</p>" for p in paragraphs
+    )
     return f"""
 <div class='engine-read-panel'>
   <div class='erp-head'>Engine read — qualitative recommendation</div>
-  <div class='erp-body'>{html.escape(rec)}</div>
+  <div class='erp-body'>{paragraphs_html}</div>
 </div>
 """
+
+
+def _render_inline_markdown(text: str) -> str:
+    """Light-touch inline rendering for engine_recommendation text:
+    escape HTML, then convert **bold** → <strong> so the engine can
+    emphasize per-user instructions (e.g. **Aidy (watching):**)."""
+    escaped = html.escape(text)
+    # Convert **bold** to <strong>bold</strong>.
+    parts = escaped.split("**")
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            out.append(f"<strong>{part}</strong>")
+        else:
+            out.append(part)
+    return "".join(out)
 
 
 def _render_conviction(snap: dict, watchlist_entry: dict) -> str:
@@ -1758,6 +1884,7 @@ def _collapsible(title: str, headline: str, body: str, open: bool = False) -> st
     <div class='head'>
       <span class='title'>{title}</span>
       <span class='meta'>{headline}</span>
+      <span class='expand-cue'></span>
     </div>
   </summary>
   <div class='body'>

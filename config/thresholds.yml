@@ -255,3 +255,22 @@ dashboard:
   news_headlines_max: 3
   # How many past earnings reactions to display.
   earnings_reactions_lookback: 4
+
+# ---------- Claude API pricing (for run-cost tracking) ----------
+#
+# Per-million-token prices in USD. Used to convert tokens-consumed
+# (tracked per run inside the engine) into a per-run dollar cost shown
+# in the dashboard header — plus an estimated annualized figure
+# (cost-per-run × runs-per-year).
+#
+# Update these when Anthropic changes pricing. Sources:
+#   https://www.anthropic.com/pricing
+# Defaults are the published 2026 prices for Claude Sonnet 4.6 — the
+# expected workhorse model for thesis + engine-read generation.
+
+claude_pricing:
+  model_name: "claude-sonnet-4-6"
+  input_per_million_tokens_usd:  3.00
+  output_per_million_tokens_usd: 15.00
+  # How often the engine runs per year (nightly cron = 365).
+  runs_per_year: 365

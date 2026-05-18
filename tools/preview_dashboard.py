@@ -43,6 +43,18 @@ def build_payload() -> dict:
         "run_started_at": "2026-05-18T03:00:00+00:00",
         "run_finished_at": "2026-05-18T03:02:18+00:00",
         "market_context": {"regime": "NEUTRAL", "vix": "18.4"},
+        # Synthetic LLM-call cost tracking. Populated by main.py once
+        # LLM calls (thesis synthesis + engine_recommendation) are
+        # wired in; pricing comes from config/thresholds.yml. For 3
+        # tickers × ~2,500 input tokens (regime narrative + catalyst
+        # context) + ~1,200 output tokens (thesis + engine read) per
+        # ticker, you'd expect roughly the numbers below.
+        "cost": {
+            "input_tokens": 7_800,
+            "output_tokens": 3_650,
+            "llm_calls": 6,   # 3 tickers × 2 calls (thesis + engine read)
+            "notes": "synthesis calls only — pipeline math runs on FMP data, no LLM cost",
+        },
         "watchlist": {
             "NVDA": {
                 "tier": "A",
@@ -170,10 +182,22 @@ def _build_nvda() -> dict:
             ],
             "analyst_revisions": {"count": 3, "avg_pt": 290, "trend": "↑ rising"},
             "engine_recommendation": (
-                "Earnings 35 sessions out — outside 30d horizon (clean ENTER possible on 30d), inside 60d "
-                "(Layer-3 catalyst veto fires on 60d). Recommend ENTER on the 30d horizon ahead of next "
-                "Tuesday's Goldman conference; defer 60d entry until after the June 26 print to avoid "
-                "binary-event risk on a position you'd otherwise hold through it."
+                "NVDA is the cleanest setup on the watchlist this run. The regime is uptrend-quiet (84% "
+                "confidence, 28 sessions in regime — the longest of any current name), MC and PDE agree "
+                "within 1.2pp on P(target), and §4.2 confirms Tier A behavior across all four properties. "
+                "Fair value $215–$248 vs $225 current means you're not chasing a stretched valuation. "
+                "Conviction has been rising 4 of 5 nights — durable signal.\n\n"
+                "The catalyst calendar is what splits the verdict across horizons. Earnings is "
+                "June 26 — 35 trading sessions out. That's beyond your 30-day window (clean ENTER possible) "
+                "but inside your 60-day window (Layer-3 catalyst veto fires, becomes WAIT). The "
+                "options market is pricing a ±6.1% earnings-day move; the last four reactions averaged "
+                "+7.5% with one negative print, so binary risk is real but skewed positive historically.\n\n"
+                "Recommended action: ENTER on the 30d horizon now — buy in the $216–$220 zone "
+                "(70% of MC paths touch $217 between May 28 and Jun 06), target $245 (+8.7%), stop "
+                "$198 (-12.1%). The Goldman conference next Tuesday is a near-term positive catalyst "
+                "that doesn't reset the binary-event clock. Defer 60d entry until after the June 26 "
+                "print clears — re-evaluate the morning after with new data in hand. If you're already "
+                "in: hold through earnings, the historical reaction skew supports it."
             ),
         },
         "regime": {
@@ -330,10 +354,21 @@ def _build_amat() -> dict:
             ],
             "analyst_revisions": {"count": 2, "avg_pt": 502, "trend": "→ stable"},
             "engine_recommendation": (
-                "No binary catalyst within either horizon. Conviction at 0.56 — between the 0.55 WAIT floor "
-                "and 0.70 ENTER threshold — so watchers should WAIT for either edge to expand or a clearer "
-                "regime call. Entered (Jesse): HOLD, thesis intact, stop ($360) provides 17% downside "
-                "protection from current price."
+                "AMAT sits in a less decisive setup than NVDA. The regime is uptrend-noisy "
+                "(72% confidence, only 19 sessions in regime) — directionally positive, but daily vol "
+                "oscillates 1.8%–3.2% which is the classic Tier-B mid-cap-growth profile. MC and PDE "
+                "agree within 1.4pp on P(target), so the model is internally consistent, but the "
+                "headline edge isn't strong enough to clear the 0.70 ENTER threshold (final score 0.56).\n\n"
+                "No binary catalyst on either horizon — earnings is 45 sessions out, well past 60d, "
+                "so there's no veto-driven WAIT. The slight +0.5σ valuation premium ($436 vs $442 FV "
+                "mean) is a modest headwind but well clear of the +2σ Layer-3 veto threshold. "
+                "Trajectory stable around 0.55–0.57 — the signal is durable, just not strong enough.\n\n"
+                "Recommended action splits by who you are. **Aidy (watching):** WAIT both horizons. "
+                "The $425–$432 zone is where conviction would meaningfully strengthen — let price "
+                "come to you rather than chasing $436. Re-evaluate after next week if regime "
+                "confidence pushes above 80%. **Jesse (entered @ $390):** HOLD both horizons. You're "
+                "up ~12% from entry, the thesis (AI-capex secular tailwind) is intact, and your stop "
+                "at $360 gives 17% downside protection from current. No need to act."
             ),
         },
         "regime": {
@@ -484,11 +519,25 @@ def _build_ionq() -> dict:
             ],
             "analyst_revisions": {"count": 2, "avg_pt": 51, "trend": "↓ falling"},
             "engine_recommendation": (
-                "No scheduled binary catalyst, but qualitative news flow is meaningfully negative: "
-                "Goldman PT cut + insider selling + competitive narrative pressure. Combined with the "
-                "downtrend regime override, the engine recommends SKIP for both Aidy and Jesse. Revisit "
-                "after either: (a) regime detector flips to sideways or uptrend, or (b) price retakes "
-                "the 20-day moving average with rising volume."
+                "IONQ is a SKIP across the board for structural reasons, not noise. Three independent "
+                "signals are all flashing red simultaneously, which is exactly the scenario the "
+                "three-layer model is designed to catch.\n\n"
+                "Layer 1 (edge): P(target) is only 35% while P(stop) is 32% — the probability "
+                "advantage is razor-thin (+3pp), and EV is barely positive at +0.2× risk. By "
+                "itself this is just a thin setup. Layer 2 (confidence): MC and PDE disagree by "
+                "6.5pp on P(target), triggering a 30% confidence haircut — the model is being "
+                "stretched by IONQ's extreme volatility (95% annualized, 0.42 vol-of-vol). "
+                "Trajectory has flipped direction 4 times in the last 5 nights, another 10% "
+                "haircut. Final confidence multiplier: 0.63. Layer 3 (veto): the regime detector "
+                "calls downtrend at 78% confidence — above the 70% Layer-3 ENTER veto threshold. "
+                "Even if the edge looked good, the regime says don't catch a falling knife.\n\n"
+                "Qualitative news flow reinforces the quant call: Goldman cut PT to $48 from $62, "
+                "$2.9M of insider selling in the last week, and competitive narrative pressure from "
+                "IBM's quantum-roadmap update. Recommended action: SKIP both horizons for both of "
+                "you. Revisit only after EITHER (a) the regime detector flips to sideways or uptrend "
+                "AND confidence stays above 60% for 5 consecutive nights, OR (b) price retakes the "
+                "20-day moving average ($58.40) on volume ≥ 1.5× the 20-day average. Until then, "
+                "no action — the math, the model-trust signals, and the regime all agree."
             ),
         },
         "regime": {
