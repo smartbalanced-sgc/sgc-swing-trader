@@ -150,6 +150,13 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
             inputs["p_stop"] = float(user_mc_horizon["p_stop"])
             inputs["ev_normalized"] = float(user_mc_horizon["ev_normalized"])
             inputs["user_state"] = user_state
+            # Per-(user, horizon) MC<->PDE delta from analytic_verifier
+            # overrides the per-ticker fallback in common_inputs. Allows
+            # the Layer-2 haircut to be horizon-specific instead of
+            # applying the same delta to both 30d and 60d verdicts.
+            inputs["mc_pde_p_target_delta_pp"] = _per_user_horizon_pde_delta(
+                snap, user, h, fallback=inputs.get("mc_pde_p_target_delta_pp", 0.0)
+            )
 
             breakdown = conviction.evaluate(inputs, horizon_days=h)
 
@@ -339,10 +346,35 @@ def _build_common_inputs(snap: dict) -> dict:
 
 def _safe_get_pp_delta(av_block: dict) -> float:
     """Pull the MC<->PDE P(target) delta from analytic_verifier. Default
-    0.0 when the step isn't live yet (no agreement penalty applies)."""
+    0.0 when the step isn't live yet (no agreement penalty applies).
+
+    Returns the MAX delta across all (user, horizon) pairs - used as
+    the per-ticker fallback when per-horizon detail isn't available.
+    The per-(user, horizon) lookup in `_per_user_horizon_pde_delta`
+    is the preferred path."""
     if av_block.get("status") != "ok":
         return 0.0
-    return float(av_block.get("p_target_delta_pp") or 0.0)
+    return float(
+        av_block.get("max_p_target_delta_pp")
+        or av_block.get("p_target_delta_pp")
+        or 0.0
+    )
+
+
+def _per_user_horizon_pde_delta(snap: dict, user: str, horizon: int, fallback: float) -> float:
+    """Look up the specific (user, horizon) PDE-vs-MC delta from the
+    analytic_verifier block. Falls back to `fallback` when the block
+    is unavailable or the user/horizon entry is missing."""
+    av = snap.get("analytic_verifier") or {}
+    if av.get("status") != "ok":
+        return fallback
+    per_h = (av.get("horizons") or {}).get(horizon)
+    if not per_h:
+        return fallback
+    per_user = (per_h.get("users") or {}).get(user)
+    if not per_user:
+        return fallback
+    return float(per_user.get("delta_p_target_pp") or 0.0)
 
 
 def _safe_get_fv_sigmas(fv_block: dict) -> float:

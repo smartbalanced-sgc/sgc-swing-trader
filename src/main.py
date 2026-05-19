@@ -180,6 +180,17 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
         "analytic_verifier",
         lambda: analytic_verifier.verify(ticker, snap),
     )
+    # The dashboard reads `snap["cross_check"]` for the Math
+    # Cross-check panel. analytic_verifier produces that shape
+    # directly (just `horizons` keyed by horizon_days with mc/pde/
+    # delta fields per metric); promote it so the panel renders.
+    if snap["analytic_verifier"].get("status") == "ok":
+        snap["cross_check"] = {
+            "status": "ok",
+            "horizons": snap["analytic_verifier"].get("horizons", {}),
+        }
+    else:
+        snap["cross_check"] = {"status": "pending", "reason": "analytic_verifier not ok"}
 
     # Step 8 — verdict synthesis. Produces the full per-ticker
     # conviction block (horizons → users → {breakdown, targets})
@@ -248,6 +259,7 @@ def _pending_block(reason: str) -> dict:
         "price_levels": {"status": "pending", "reason": reason},
         "daily_path": {"status": "pending", "reason": reason},
         "analytic_verifier": {"status": "pending", "reason": reason},
+        "cross_check": {"status": "pending", "reason": reason},
         "conviction": {"status": "pending", "reason": reason},
         "thesis": {"status": "pending", "reason": reason},
     }

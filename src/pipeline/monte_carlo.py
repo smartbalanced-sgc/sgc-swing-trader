@@ -203,8 +203,13 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
     rng = np.random.default_rng(seed)
 
     # --- Simulate paths out to the longer horizon ---
+    # When earnings-jump overlay is active we ALSO generate a parallel
+    # GBM-only path set (same random draws, jump day not overwritten)
+    # so the analytic_verifier step (PDE-based cross-check) has
+    # something to compare against — PDE assumes continuous diffusion
+    # and can't represent the discrete empirical-reaction jump.
     n_days = max(HORIZONS)
-    paths = _simulate_paths(
+    paths, paths_gbm_only = _simulate_paths(
         s0=current_price,
         drift_annual=drift_annualized,
         sigma_annual=sigma_annualized,
@@ -219,11 +224,15 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
     forecast_dates = _build_forecast_dates(n_days)
 
     # --- Per-user, per-horizon first-passage stats ---
+    # When jump overlay is active, also compute first-passage on the
+    # parallel GBM-only paths and surface as `p_target_gbm_only` /
+    # `p_stop_gbm_only` for the analytic_verifier cross-check.
     users_out: dict[str, dict] = {}
     for user, user_targets in targets_block["users"].items():
         users_out[user] = _compute_user_stats(
             user_targets=user_targets,
             paths=paths,
+            paths_gbm_only=paths_gbm_only,
             current_price=current_price,
             horizons=HORIZONS,
         )
@@ -291,8 +300,8 @@ def _simulate_paths(
     rng: np.random.Generator,
     earnings_jump_day: int | None,
     earnings_reactions: list[float],
-) -> np.ndarray:
-    """Generate n_paths x n_days price matrix.
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Generate n_paths x n_days price matrices.
 
     GBM in log-space:
         log(S_{t+1}/S_t) = (mu_log - sigma_daily^2 / 2)
@@ -303,9 +312,17 @@ def _simulate_paths(
         mu_log_daily = mu_log_annual / 252
         sigma_daily  = sigma_annual / sqrt(252)
 
-    If earnings_jump_day is set, the GBM increment on that day is
-    REPLACED with a bootstrap draw from earnings_reactions (which are
-    fractional returns, e.g. -0.05 for -5%).
+    Returns (paths, paths_gbm_only):
+      paths           - the production simulation. If earnings_jump_day
+                        is set, the GBM step on that day is REPLACED
+                        with a bootstrap draw from earnings_reactions
+                        (which are fractional returns, e.g. -0.05 = -5%).
+      paths_gbm_only  - same random draws but WITHOUT the earnings jump
+                        overlay applied. Used by analytic_verifier
+                        (PDE cross-check) which assumes continuous
+                        diffusion and can't represent discrete jumps.
+                        None when no jump was active (paths_gbm_only ==
+                        paths in that case; second copy would be waste).
     """
     mu_log_annual = math.log(1.0 + drift_annual) if drift_annual > -1.0 else math.log(1e-9)
     mu_log_daily = mu_log_annual / TRADING_DAYS_PER_YEAR
@@ -314,19 +331,29 @@ def _simulate_paths(
 
     # All log-returns in one shot (vectorized)
     z = rng.standard_normal(size=(n_paths, n_days))
-    log_returns = drift_term + sigma_daily * z
+    log_returns_base = drift_term + sigma_daily * z
 
-    # Earnings jump overlay
-    if earnings_jump_day is not None and earnings_reactions:
-        day_idx = earnings_jump_day - 1  # 1-indexed in API -> 0-indexed in array
-        reactions = np.asarray(earnings_reactions, dtype=float)
-        log_reactions = np.log(1.0 + reactions)  # convert pct return -> log return
-        # Bootstrap-sample one log-reaction per path with replacement
-        log_returns[:, day_idx] = rng.choice(log_reactions, size=n_paths, replace=True)
+    # GBM-only paths (no jump overlay) — built once, used by both the
+    # production path (if no jump) and the cross-check (always).
+    log_prices_base = np.cumsum(log_returns_base, axis=1)
+    paths_gbm_only = s0 * np.exp(log_prices_base)
 
-    # Cumulative log-returns -> price paths
-    log_prices = np.cumsum(log_returns, axis=1)
-    return s0 * np.exp(log_prices)
+    # If jump is inactive, production paths ARE the GBM-only paths.
+    if earnings_jump_day is None or not earnings_reactions:
+        return paths_gbm_only, None
+
+    # Apply earnings jump overlay on day_idx, then re-cumsum.
+    day_idx = earnings_jump_day - 1
+    reactions = np.asarray(earnings_reactions, dtype=float)
+    log_reactions = np.log(1.0 + reactions)
+    log_returns_with_jump = log_returns_base.copy()
+    log_returns_with_jump[:, day_idx] = rng.choice(
+        log_reactions, size=n_paths, replace=True
+    )
+    log_prices_with_jump = np.cumsum(log_returns_with_jump, axis=1)
+    paths_with_jump = s0 * np.exp(log_prices_with_jump)
+
+    return paths_with_jump, paths_gbm_only
 
 
 # ---------- per-user first-passage ----------
@@ -335,20 +362,46 @@ def _simulate_paths(
 def _compute_user_stats(
     user_targets: dict,
     paths: np.ndarray,
+    paths_gbm_only: np.ndarray | None,
     current_price: float,
     horizons: tuple[int, ...],
 ) -> dict:
-    """For one user, compute first-passage stats at each horizon."""
+    """For one user, compute first-passage stats at each horizon.
+
+    When paths_gbm_only is non-None (jump overlay was active), ALSO
+    compute first-passage on those parallel paths and surface as
+    `p_target_gbm_only` / `p_stop_gbm_only` for the analytic verifier
+    (PDE cross-check). When None, GBM-only fields mirror the
+    production fields since they're identical.
+    """
     target_price = user_targets["target_price"]
     stop_price = user_targets["stop_price"]
     out_horizons: dict[int, dict] = {}
     for h in horizons:
-        out_horizons[h] = _first_passage_stats(
+        stats = _first_passage_stats(
             paths[:, :h],
             current_price=current_price,
             target_price=target_price,
             stop_price=stop_price,
         )
+        if paths_gbm_only is not None:
+            gbm_stats = _first_passage_stats(
+                paths_gbm_only[:, :h],
+                current_price=current_price,
+                target_price=target_price,
+                stop_price=stop_price,
+            )
+            stats["p_target_gbm_only"] = gbm_stats["p_target"]
+            stats["p_stop_gbm_only"] = gbm_stats["p_stop"]
+            stats["ev_gbm_only_pct"] = gbm_stats["ev_pct"]
+            stats["ev_gbm_only_normalized"] = gbm_stats["ev_normalized"]
+        else:
+            # No jump overlay -> production and GBM-only are identical.
+            stats["p_target_gbm_only"] = stats["p_target"]
+            stats["p_stop_gbm_only"] = stats["p_stop"]
+            stats["ev_gbm_only_pct"] = stats["ev_pct"]
+            stats["ev_gbm_only_normalized"] = stats["ev_normalized"]
+        out_horizons[h] = stats
     return {
         "target_price": target_price,
         "stop_price": stop_price,
