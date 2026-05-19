@@ -39,6 +39,33 @@ data_sanity:
   # WARN: zero-volume bars exceed this fraction of the window.
   volume_warn_ratio: 0.05
 
+# ---------- Step 3 — Catalyst detection ----------
+#
+# Lookback / forward windows for the FMP catalyst sub-fetches. Cache
+# TTL controls how often the catalyst step re-hits FMP; news flow moves
+# intraday but for a nightly engine 6 hours is more than fresh enough.
+# The downstream Layer-3 catalyst veto and proximity haircut bands are
+# in the conviction section below.
+
+catalyst:
+  # How many trading days forward to look for the next scheduled
+  # catalyst (earnings, ex-div). 90 covers the secondary 60-day horizon
+  # plus ~30 days of buffer for in-horizon-veto edge cases.
+  forward_window_days: 90
+  # How many days of historical earnings reactions to display in the
+  # catalyst panel. 4 quarters = ~1 year of earnings history.
+  history_lookback_quarters: 4
+  # How many days back to look for news headlines and analyst
+  # rating-change activity. 30 days = ~1 trading month, captures
+  # the lead-up to the next event without burying signal in noise.
+  news_lookback_days: 30
+  analyst_lookback_days: 30
+  # Per-ticker catalyst-step disk cache TTL (hours). News flow is more
+  # dynamic than short-interest data so this is shorter than the
+  # 24h short-interest cache, but still long enough that a same-day
+  # re-run of `python -m src.main` doesn't re-hit FMP for every ticker.
+  cache_ttl_hours: 6
+
 # ---------- §4.2 Measurement-driven tier classifier ----------
 #
 # Each ticker scored against four observable properties. Worst-of rule:

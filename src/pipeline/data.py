@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 
@@ -36,17 +35,13 @@ import requests
 import yaml
 
 from src import config
+from src.data_sources import fmp
 
 # NYSE calendar — same holiday set as NASDAQ for our purposes, and it
 # tracks ad-hoc closures (e.g. Hurricane Sandy, Jan 9 2025 for President
 # Carter). Loaded once at import time.
 NYSE_CAL = mcal.get_calendar("XNYS")
 
-# Stable API per dip-engine canonical pattern (FOUNDING_CHARTER.md §A.1).
-# All requests: GET /stable/{endpoint}?symbol={SYMBOL}&apikey={KEY}
-# NOT the legacy /api/v3/{endpoint}/{SYMBOL}?apikey={KEY} pattern, which
-# returns 403 for Starter-plan keys.
-FMP_BASE = "https://financialmodelingprep.com/stable"
 CACHE_DIR = config.DATA_DIR / "cache"
 
 # Thresholds — all sourced from config/thresholds.yml so we can calibrate
@@ -76,16 +71,8 @@ def fetch(ticker: str, refresh: bool = False) -> dict:
         with cache_path.open() as f:
             return json.load(f)
 
-    api_key = os.environ.get("FMP_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "FMP_API_KEY not set in environment. Export it locally "
-            "(`export FMP_API_KEY=...`) or set it as a GitHub Actions "
-            "secret for cron runs."
-        )
-
-    profile = _fetch_profile(ticker, api_key)
-    prices = _fetch_prices(ticker, api_key)
+    profile = _fetch_profile(ticker)
+    prices = _fetch_prices(ticker)
     sanity = _run_sanity(prices)
 
     result = {
@@ -105,36 +92,11 @@ def fetch(ticker: str, refresh: bool = False) -> dict:
     return result
 
 
-# ---------- FMP HTTP ----------
+# ---------- FMP fetchers (HTTP layer lives in src.data_sources.fmp) ----------
 
 
-def _fmp_get(endpoint: str, ticker: str, api_key: str, **extra) -> object:
-    """Thin wrapper for FMP /stable/{endpoint}?symbol={TICKER}&...
-
-    Raises RuntimeError with a clear, actionable message on 402 (endpoint
-    not on your plan) and 403 (key invalid or endpoint deprecated). Other
-    non-200s raise via requests.HTTPError.
-    """
-    url = f"{FMP_BASE}/{endpoint}"
-    params = {"symbol": ticker, "apikey": api_key, **extra}
-    resp = requests.get(url, params=params, timeout=FETCH_TIMEOUT_SEC)
-    if resp.status_code == 402:
-        raise RuntimeError(
-            f"FMP /{endpoint} returned 402 — not available on your plan. "
-            "Charter §6 says: do NOT call this endpoint on Starter."
-        )
-    if resp.status_code == 403:
-        raise RuntimeError(
-            f"FMP /{endpoint} returned 403 — endpoint name may be wrong, "
-            f"or key invalid. Run `python tools/probe_fmp.py NVDA` to find "
-            f"the correct endpoint names empirically."
-        )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def _fetch_profile(ticker: str, api_key: str) -> dict:
-    body = _fmp_get("profile", ticker, api_key)
+def _fetch_profile(ticker: str) -> dict:
+    body = fmp.get("profile", ticker)
     if not body:
         raise RuntimeError(f"FMP returned empty profile for {ticker}")
     p = body[0] if isinstance(body, list) else body
@@ -156,11 +118,11 @@ def _fetch_profile(ticker: str, api_key: str) -> dict:
     }
 
 
-def _fetch_prices(ticker: str, api_key: str) -> list[dict]:
+def _fetch_prices(ticker: str) -> list[dict]:
     from_date = (date.today() - timedelta(days=int(HISTORY_YEARS * 365.25))).isoformat()
     # Stable endpoint name based on FMP's current convention. If this
     # returns 404, tools/probe_fmp.py will tell us the correct name.
-    body = _fmp_get("historical-price-eod/full", ticker, api_key, **{"from": from_date})
+    body = fmp.get("historical-price-eod/full", ticker, from_=from_date)
     # Stable can return either a bare list or {"historical": [...]} —
     # handle both shapes defensively.
     if isinstance(body, list):
