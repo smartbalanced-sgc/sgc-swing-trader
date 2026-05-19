@@ -229,15 +229,27 @@ def _safe(payload: dict, sub_fetch_name: str, fn, *args, **kwargs):
 # ---------- FMP fetchers ----------
 
 
+# FMP Starter caps earnings-calendar HISTORICAL lookback at 1 year
+# (confirmed by FMP support 2026-05-19; exceeding it returns a 402,
+# not an empty result). 360 days = safe margin under 365 that still
+# covers 4 quarterly earnings events — sufficient for the
+# EARNINGS_REACTIONS_LOOKBACK=4 historical-reaction panel. Forward
+# lookback is uncapped on Starter and uses the full FORWARD_WINDOW_DAYS.
+_HISTORICAL_LOOKBACK_DAYS_CAP = 360
+
+
 def _fetch_earnings_events(ticker: str) -> list[dict]:
-    """Fetch earnings events for this ticker spanning past
-    (HISTORY_LOOKBACK_QUARTERS * ~95 days) through future
-    FORWARD_WINDOW_DAYS. FMP's `earnings-calendar` endpoint returns
-    every company's events in the window; filter to this ticker
-    locally. (Filtering server-side via `symbol=` works on some FMP
-    plans but not consistently — local filter is the safe path.)
+    """Fetch earnings events for this ticker spanning past 360 days
+    through future FORWARD_WINDOW_DAYS. FMP's `earnings-calendar`
+    endpoint returns every company's events in the window; filter to
+    this ticker locally. (Filtering server-side via `symbol=` works on
+    some FMP plans but not consistently — local filter is the safe path.)
+
+    Per FMP support, the FROM date must be within 1 year of today on
+    Starter; we cap at 360 days to leave margin.
     """
-    from_date = date.today() - timedelta(days=HISTORY_LOOKBACK_QUARTERS * 95)
+    historical_days = min(HISTORY_LOOKBACK_QUARTERS * 95, _HISTORICAL_LOOKBACK_DAYS_CAP)
+    from_date = date.today() - timedelta(days=historical_days)
     to_date = date.today() + timedelta(days=FORWARD_WINDOW_DAYS)
     body = fmp.get(
         "earnings-calendar",
@@ -397,6 +409,59 @@ def _news_bullets(items: list[dict], limit: int) -> list[str]:
     return out
 
 
+# Bullish-ness rank for analyst grade labels — used as the fallback
+# classifier when FMP's response doesn't include an explicit action
+# field (or uses a field name we don't recognize). Rank-up = upgrade,
+# rank-down = downgrade, same rank or unknown = "held". Covers the
+# variants we see in FMP's grade strings across firms (Goldman uses
+# "Buy", Morgan Stanley "Overweight", Wells "Outperform", etc.).
+_GRADE_RANKS: dict[str, int] = {
+    "strong sell": 0, "sell": 0,
+    "underperform": 1, "underweight": 1, "reduce": 1, "negative": 1,
+    "hold": 2, "neutral": 2, "market perform": 2, "equal weight": 2,
+    "sector perform": 2, "peer perform": 2, "in-line": 2, "in line": 2,
+    "outperform": 3, "overweight": 3, "accumulate": 3, "sector outperform": 3,
+    "long-term buy": 3, "moderate buy": 3, "positive": 3,
+    "buy": 4, "strong buy": 4, "conviction buy": 4,
+}
+
+
+def _grade_rank(grade) -> int | None:
+    """Map an analyst grade string to its bullish-ness rank, or None
+    if we don't recognize it."""
+    if not grade:
+        return None
+    return _GRADE_RANKS.get(str(grade).strip().lower())
+
+
+def _classify_grade_action(g: dict) -> str:
+    """Return one of 'upgrade', 'downgrade', or 'held' for a single
+    grade-change record. FMP's response shape varies — try several
+    likely action-field names, then fall back to inferring from
+    previousGrade vs newGrade rank comparison."""
+    # Try explicit action-like fields in priority order.
+    for key in ("action", "gradeAction", "gradeChange"):
+        v = (g.get(key) or "").strip().lower()
+        if not v:
+            continue
+        if "up" in v or "raise" in v:
+            return "upgrade"
+        if "down" in v or "cut" in v or "lower" in v:
+            return "downgrade"
+        if "main" in v or "hold" in v or "reiterat" in v or "init" in v:
+            return "held"
+
+    # Fallback: rank comparison between previousGrade and newGrade.
+    prev_rank = _grade_rank(g.get("previousGrade"))
+    new_rank = _grade_rank(g.get("newGrade"))
+    if prev_rank is not None and new_rank is not None:
+        if new_rank > prev_rank:
+            return "upgrade"
+        if new_rank < prev_rank:
+            return "downgrade"
+    return "held"
+
+
 def _analyst_revisions_summary(grades: list[dict], pt: dict | None) -> dict:
     """Summarize rating-change activity in the last ANALYST_LOOKBACK_DAYS.
 
@@ -418,8 +483,9 @@ def _analyst_revisions_summary(grades: list[dict], pt: dict | None) -> dict:
             "trend": "no rating changes",
         }
 
-    upgrades = sum(1 for g in recent if (g.get("action") or "").lower() == "upgrade")
-    downgrades = sum(1 for g in recent if (g.get("action") or "").lower() == "downgrade")
+    classifications = [_classify_grade_action(g) for g in recent]
+    upgrades = sum(1 for c in classifications if c == "upgrade")
+    downgrades = sum(1 for c in classifications if c == "downgrade")
     held = len(recent) - upgrades - downgrades
 
     if upgrades > downgrades * 1.5:

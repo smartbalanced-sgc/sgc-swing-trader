@@ -35,8 +35,18 @@ not re-attempted in subsequent runs (charter §A.1 `FMP_402` set).
 earnings-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
 ```
 
-- Use a 2-year backward window to capture last 8 quarters.
 - Response includes `date` per earnings event.
+- Returns all symbols in the window — filter client-side for the ticker
+  you want.
+- **Plan limit (Starter):** historical lookback is capped at **1 year**.
+  Requesting `from=` older than 365 days from today returns 402
+  ("not available on your plan") even though the endpoint itself IS
+  on Starter. Forward lookback is uncapped. We cap our `from=` at 360
+  days back as a safe margin — still covers 4 quarterly earnings
+  events for the historical-reactions panel
+  (see `_HISTORICAL_LOOKBACK_DAYS_CAP` in `src/pipeline/catalyst.py`).
+- **Plan limit (Starter):** US exchanges only — matches our charter
+  scope, no impact.
 - **Caveat:** BMO/AMC timing field was removed due to instability. For
   reaction-percentage computation, use *next-trading-day close vs prior-day
   close* (correct regardless of timing). FMP expects to restore timing
@@ -48,11 +58,17 @@ earnings-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
 grades?symbol=TICKER
 ```
 
-Response fields per change:
+Response fields per change (observed empirically — see below):
 - `date` — date of the rating change
 - `gradingCompany` — brokerage firm name (Goldman, Morgan Stanley, etc.)
-- `action` — `upgrade` | `downgrade` | `maintained`
-- `previousGrade`, `newGrade` — old and new rating labels
+- `previousGrade`, `newGrade` — old and new rating labels (always present)
+- Action field — **field name is inconsistent across responses**. May
+  appear as `action`, `gradeAction`, or `gradeChange`, sometimes
+  missing entirely. Our parser
+  (`_classify_grade_action` in `src/pipeline/catalyst.py`) checks all
+  three names AND falls back to ranking `previousGrade` vs `newGrade`
+  on a bullishness scale (Sell=0, Hold=2, Buy=4, etc.) when no action
+  field is present. This is more reliable than trusting a single field.
 
 **Caveat:** No price target attached to each change. To pair "Goldman
 upgraded" with "new PT $290" in the narrative, render two separate
