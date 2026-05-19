@@ -117,6 +117,17 @@ _SCALE_TREND = _R.normalization_scale.trend_annualized
 _SCALE_VOL = _R.normalization_scale.vol_annualized
 _SCALE_VOV = _R.normalization_scale.vol_of_vol
 
+# Cap for the trend feature when computing classifier distance.
+# Observed annualized log-return slope on a 60-day window during
+# parabolic moves can hit hundreds of percent (NVDA: +135%/yr, IONQ:
+# +745%/yr in May 2026). Without a cap, the trend dimension hijacks
+# the distance metric for momentum stocks and forces every other
+# feature (vol, vov) to fight for irrelevance. Capping at ±50%/yr
+# treats anything beyond as "momentum at the rail" — vol and vov take
+# over the discrimination from there. Raw uncapped value is still
+# surfaced in the `features` dict so users see reality.
+_TREND_CAP_ABS = 0.50
+
 # Centroid feature vectors per state, materialized once at import.
 # Each row is [trend_annualized, vol_annualized, vol_of_vol] aligned
 # to _STATES order so softmax indexing matches.
@@ -286,12 +297,21 @@ def _rolling_std(arr: np.ndarray, window: int) -> np.ndarray:
 
 def _classify(features: np.ndarray) -> tuple[np.ndarray, str, float]:
     """Score the features against all centroids, softmax, return
-    (probability vector, selected state, confidence)."""
-    # Normalized Euclidean distance from features to each centroid.
-    deltas = (_CENTROIDS - features) / _NORMALIZER  # shape: (n_states, 3)
+    (probability vector, selected state, confidence).
+
+    The trend feature is clipped to ±_TREND_CAP_ABS before distance
+    computation so that parabolic-momentum names don't hijack the
+    classification via an extreme trend value. Vol and vov are not
+    clipped — their natural ranges (0-1.5 and 0-1) are already
+    bounded enough to behave well in distance space."""
+    # Clip trend for classification only; keep raw value in features dict.
+    features_clipped = features.copy()
+    features_clipped[0] = max(-_TREND_CAP_ABS, min(_TREND_CAP_ABS, features_clipped[0]))
+
+    deltas = (_CENTROIDS - features_clipped) / _NORMALIZER  # shape: (n_states, 3)
     distances = np.linalg.norm(deltas, axis=1)  # shape: (n_states,)
     # Softmax over negative distance (smaller distance → higher prob).
-    # Subtract min for numerical stability.
+    # Subtract max for numerical stability.
     scores = -distances / max(_SOFTMAX_TEMPERATURE, 1e-9)
     scores -= scores.max()
     exps = np.exp(scores)
@@ -387,7 +407,6 @@ def _build_narrative(
 
 
 def _print_summary(payload: dict) -> None:
-    print(f"\n=== {payload.get('features') and ''}regime ===")
     print(f"  state:              {payload['state']}")
     print(f"  confidence:         {payload['confidence']*100:.1f}%")
     print(f"  days_in_regime:     {payload['days_in_regime']}")
