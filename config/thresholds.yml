@@ -424,6 +424,71 @@ monte_carlo:
   # daily-path summary panel. Matches the 60d secondary horizon.
   daily_path_days: 60
 
+# ---------- Step 5 — Fair value triangulation ----------
+#
+# Three independent valuation methods, triangulated by taking the
+# median (robust to outliers) for `range_mean`. The range_low and
+# range_high come from the actual min/max across methods; sigma is
+# estimated as (high - low) / 4 for premium-vs-FV computation.
+#
+# Each method is independent — failures (negative FCF, missing
+# analyst estimates, no peers, gated endpoints) skip that method but
+# don't fail the step. The minimum_methods threshold sets how many
+# must succeed for the step to return "ok" overall.
+
+fair_value:
+  # 1-of-3 is enough for v1 - even with just one method we get a
+  # premium-vs-anchor signal. When more methods agree, the range
+  # tightens and the signal is more decisive.
+  min_methods_for_triangulation: 1
+
+  # If only one method succeeds, we can't compute a real range/sigma.
+  # Fall back to this fraction of the method's value as the +/-1 sigma
+  # width (15% reflects typical valuation uncertainty for established
+  # equities).
+  single_method_sigma_pct: 0.15
+
+  # Per-method disk cache TTL. Fundamental data (income, cash flow,
+  # analyst estimates) changes quarterly to biweekly, not daily - 24h
+  # is generous AND avoids re-hitting FMP for every nightly run.
+  cache_ttl_hours: 24
+
+  # DCF parameters
+  dcf:
+    enabled: true
+    # Discount rate (WACC). 9% is a typical equity discount rate -
+    # ~4% risk-free + ~5% equity risk premium. Calibratable per
+    # macro regime later.
+    discount_rate: 0.09
+    # Terminal growth rate (perpetuity post-projection). 2.5% =
+    # roughly long-run GDP+inflation - the maximum reasonable
+    # forever-growth rate.
+    terminal_growth: 0.025
+    # Years of explicit FCF projection before terminal value.
+    projection_years: 5
+    # Cap the projected growth rate. Above 25%/yr is heroic for a
+    # 5-year horizon; cap protects against extrapolating recent
+    # outliers (e.g. NVDA's recent 100%+ FCF growth) into perpetuity.
+    growth_rate_cap: 0.25
+    # If TTM FCF is negative, DCF is mathematically meaningless
+    # (you'd be discounting losses forever). Skip the method and
+    # let the others do the work.
+    skip_when_fcf_negative: true
+
+  # Forward P/E peer comparison
+  forward_pe_peers:
+    enabled: true
+    # Cap peer count to manage FMP quota. Industry default is 5 peers
+    # (FMP's stock-peers returns ~5-10).
+    max_peers: 5
+
+  # Analyst PT consensus method - uses the median price target from
+  # price-target-consensus. Already fetched by the catalyst step;
+  # this method just plugs it in as one of the three valuation
+  # anchors. No additional config needed.
+  analyst_pt:
+    enabled: true
+
 # ---------- Materiality (mirrors v17 dip engine) ----------
 
 materiality:
