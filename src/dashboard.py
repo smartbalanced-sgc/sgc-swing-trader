@@ -377,6 +377,7 @@ details.subpanel[open] > summary .expand-cue::before { content: "− Collapse"; 
 .daily-path .num { font-family: ui-monospace, monospace; text-align: right; }
 .daily-path .zone-dip   { background: #fef2f2; color: #991b1b; font-weight: 600; }
 .daily-path .zone-rally { background: #f0fdf4; color: #166534; font-weight: 600; }
+.daily-path .zone-earnings { background: #fffbeb; color: #92400e; font-weight: 600; }
 
 /* footer */
 footer.band { margin-top: 56px; padding: 18px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
@@ -1188,7 +1189,20 @@ def _render_layer1(layer1: dict) -> str:
 """)
     lottery_note = ""
     if lottery:
-        lottery_note = "<div class='kv-row veto-fired'><span class='k'>Lottery filter</span><span class='v'>P(target) ≤ P(stop) — structurally bad trade</span><span class='v-right'>edge → 0</span></div>"
+        # Filter fires only when BOTH prob_diff and EV are bad — show
+        # both values so the user can see exactly what triggered it.
+        # See conviction._layer1_edge for the AND semantics.
+        prob_diff = layer1.get("lottery_filter_prob_diff", 0.0)
+        ev_norm = layer1.get("lottery_filter_ev_norm", 0.0)
+        prob_threshold = layer1.get("lottery_filter_prob_diff_threshold", 0.0)
+        lottery_note = (
+            f"<div class='kv-row veto-fired'>"
+            f"<span class='k'>Lottery filter</span>"
+            f"<span class='v'>prob_diff {prob_diff:+.2f} ≤ {prob_threshold:+.2f} "
+            f"AND EV {ev_norm:+.2f} ≤ 0 — both poor, structurally bad trade</span>"
+            f"<span class='v-right'>edge → 0</span>"
+            f"</div>"
+        )
     return f"""
 <div class='layer'>
   <div class='layer-head'>Layer 1 — Edge (does the math say yes?) <span class='layer-result'>edge {layer1['score']:.2f}</span></div>
@@ -1734,8 +1748,13 @@ def _render_daily_path(snap: dict) -> str:
     days = p.get("days") or []
     for d in days[:20]:  # cap to 20 for the inline view
         zone = d.get("zone", "")
-        zone_cls = f"zone-{zone}" if zone in ("dip", "rally") else ""
-        zone_label = {"dip": "↓ dip zone", "rally": "↑ rally zone", "": ""}.get(zone, "")
+        zone_cls = f"zone-{zone}" if zone in ("dip", "rally", "earnings") else ""
+        zone_label = {
+            "dip": "↓ dip zone",
+            "rally": "↑ rally zone",
+            "earnings": "⚡ earnings (empirical jump applied)",
+            "": "",
+        }.get(zone, "")
         rows.append(
             f"<tr><td class='num'>{d['day']}</td><td>{html.escape(d['date'])}</td>"
             f"<td class='num'>${d['median_price']:.2f}</td>"

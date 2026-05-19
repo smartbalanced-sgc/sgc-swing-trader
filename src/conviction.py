@@ -132,6 +132,9 @@ def _layer1_edge(inputs: dict, edge_cfg) -> dict:
     return {
         "score": score,
         "lottery_filter_failed": lottery_filter_failed,
+        "lottery_filter_prob_diff": prob_diff,
+        "lottery_filter_ev_norm": ev_norm,
+        "lottery_filter_prob_diff_threshold": edge_cfg.lottery_filter_min_prob_diff,
         "components": [
             {
                 "name": "P(target) - P(stop)",

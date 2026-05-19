@@ -191,6 +191,12 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
         "verdict",
         lambda: verdict.synthesize(ticker, snap, watchlist_entry),
     )
+    # Unpack the thesis (a co-product of verdict synthesis) into its
+    # own top-level snap key where _render_thesis looks.
+    if snap["conviction"].get("status") == "ok":
+        snap["thesis"] = snap["conviction"].pop("thesis", {"status": "pending"})
+    else:
+        snap["thesis"] = {"status": "pending", "reason": "verdict not ok"}
 
     # Drop the private price-data pass-through before snapshot
     # serialization (keeps snapshot files small).
@@ -243,6 +249,7 @@ def _pending_block(reason: str) -> dict:
         "daily_path": {"status": "pending", "reason": reason},
         "analytic_verifier": {"status": "pending", "reason": reason},
         "conviction": {"status": "pending", "reason": reason},
+        "thesis": {"status": "pending", "reason": reason},
     }
 
 

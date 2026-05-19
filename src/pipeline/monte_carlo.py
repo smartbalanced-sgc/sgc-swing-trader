@@ -256,6 +256,7 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
         forecast_dates=forecast_dates,
         days_to_show=min(_DAILY_PATH_DAYS, n_days),
         zone_horizons=price_levels_horizons,
+        earnings_jump_day=earnings_jump_day,
     )
 
     return {
@@ -477,12 +478,18 @@ def _compute_daily_path(
     forecast_dates: list[str],
     days_to_show: int,
     zone_horizons: dict[int, dict],
+    earnings_jump_day: int | None = None,
 ) -> dict:
-    """Median daily price + dip/rally zone tinting on relevant days.
+    """Median daily price with zone tinting per day.
 
-    Zone tinting uses the 30-day horizon's dip/rally windows (the
-    primary horizon). Days falling inside the dip window get
-    zone='dip'; rally window gets zone='rally'; otherwise empty.
+    Zone precedence (highest first):
+      - "earnings" — the single day where the empirical earnings-
+        reaction bootstrap was applied. Most informative annotation
+        because it explains why the median path "jumps" on that day.
+      - "rally" — within the rally window for the primary horizon.
+      - "dip" — within the dip window for the primary horizon.
+
+    Zone windows come from the 30-day horizon (primary).
     """
     median_prices = np.median(paths, axis=0)
 
@@ -490,6 +497,9 @@ def _compute_daily_path(
     z = zone_horizons.get(primary_h, {})
     dip_window = (z.get("dip", {}).get("window_days") or [-1, -1])
     rally_window = (z.get("rally", {}).get("window_days") or [-1, -1])
+    # earnings_jump_day is 1-indexed by external convention; convert to
+    # 0-indexed for path-array alignment.
+    earnings_idx = (earnings_jump_day - 1) if earnings_jump_day is not None else None
 
     days = []
     for i in range(min(days_to_show, len(median_prices))):
@@ -497,7 +507,9 @@ def _compute_daily_path(
         if dip_window[0] <= i <= dip_window[1]:
             zone = "dip"
         if rally_window[0] <= i <= rally_window[1]:
-            zone = "rally"  # rally takes precedence if overlap (unusual)
+            zone = "rally"  # rally over dip if overlap (unusual)
+        if earnings_idx is not None and i == earnings_idx:
+            zone = "earnings"  # earnings is the most informative — wins
         days.append({
             "day": i + 1,
             "date": forecast_dates[i] if i < len(forecast_dates) else "?",

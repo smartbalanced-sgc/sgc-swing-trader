@@ -163,11 +163,124 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
             }
         horizons_out[h] = per_horizon
 
+    # Plain-English thesis paragraph — ticker-level synthesis of
+    # regime + catalyst + analyst + short interest + tier sanity + MC
+    # stats. Tied to the FIRST user's verdict (typically shared in
+    # our two-user model). Surfaced separately via `snap["thesis"]`;
+    # main.py promotes the field after verdict returns.
+    thesis = _build_thesis(snap, horizons_out)
+
     return {
         "status": "ok",
         "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "horizons": horizons_out,
+        "thesis": thesis,
     }
+
+
+def _build_thesis(snap: dict, horizons_out: dict) -> dict:
+    """Generate a 3-5 sentence plain-English thesis synthesizing every
+    upstream block. Output `{"status": "ok", "text": "..."}` matches
+    what the dashboard's `_render_thesis` consumes.
+
+    NO markdown formatting in the text — the dashboard html.escape's
+    it, so asterisks pass through literally and would not render bold.
+    Keep it conversational research-note quality."""
+    ticker = snap.get("ticker", "this ticker")
+    regime = snap.get("regime") or {}
+    catalyst_block = snap.get("catalyst") or {}
+    tier_cls = snap.get("tier_classifier") or {}
+    mc = snap.get("monte_carlo") or {}
+
+    parts: list[str] = []
+
+    # 1. Regime read
+    state = regime.get("state")
+    conf = regime.get("confidence")
+    days = regime.get("days_in_regime")
+    if state and conf is not None:
+        days_phrase = f", {days} sessions" if days else ""
+        parts.append(f"{ticker} is in {state} ({conf*100:.0f}% confidence{days_phrase}).")
+
+    # 2. Catalyst proximity
+    ne = catalyst_block.get("next_event")
+    dist = catalyst_block.get("distance_sessions")
+    if ne and dist is not None:
+        if dist <= 1:
+            parts.append(
+                f"{ne['type'].title()} {'today' if dist == 0 else 'tomorrow'} "
+                f"({ne['date']}) — Layer-3 catalyst veto active."
+            )
+        elif dist <= 5:
+            parts.append(f"{ne['type'].title()} in {dist} sessions — proximity haircut applies to confidence.")
+        elif dist <= 30:
+            parts.append(f"{ne['type'].title()} in {dist} sessions, inside the 30d horizon.")
+        elif dist <= 60:
+            parts.append(f"{ne['type'].title()} in {dist} sessions, outside 30d but inside 60d.")
+        else:
+            parts.append(f"No catalyst inside the 60d horizon (next event {dist} sessions out).")
+
+    # 3. Historical reactions
+    reactions = catalyst_block.get("historical_reactions") or []
+    if reactions:
+        avg = sum(r["reaction_pct"] for r in reactions) / len(reactions)
+        mags = [abs(r["reaction_pct"]) for r in reactions]
+        avg_mag = sum(mags) / len(mags)
+        parts.append(
+            f"Last {len(reactions)} prints averaged {avg:+.1f}% (magnitude {avg_mag:.1f}%) — "
+            f"this is the empirical distribution the day-of-event jump bootstraps from."
+        )
+
+    # 4. Analyst consensus
+    ar = catalyst_block.get("analyst_revisions") or {}
+    if ar.get("trend"):
+        avg_pt = ar.get("avg_pt")
+        if isinstance(avg_pt, (int, float)):
+            parts.append(f"Analyst desk: {ar['trend']}; consensus PT ${avg_pt}.")
+        else:
+            parts.append(f"Analyst desk: {ar['trend']}.")
+
+    # 5. Short interest band (only when it's a real signal)
+    si = catalyst_block.get("short_interest") or {}
+    spct = si.get("short_percent_of_float")
+    trend_pct = si.get("trend_month_over_month_pct")
+    if spct is not None:
+        if spct >= 0.15:
+            band = f"elevated ({spct*100:.1f}% of float, squeeze-candidate territory)"
+            parts.append(f"Short interest {band}.")
+        elif trend_pct is not None and abs(trend_pct) >= 15:
+            direction = "building" if trend_pct > 0 else "easing"
+            parts.append(f"Short interest {spct*100:.1f}% of float, {direction} {trend_pct:+.0f}% MoM.")
+
+    # 6. Tier sanity-check (only when mismatched — silent when matched)
+    tier_anchor = snap.get("tier_anchor")
+    tier_measured = tier_cls.get("measured_tier")
+    if tier_anchor and tier_measured and tier_anchor != tier_measured:
+        decisive = tier_cls.get("decisive_property", "vol")
+        parts.append(
+            f"Tier sanity-check flags watchlist {tier_anchor} vs measured {tier_measured} "
+            f"({decisive} drives the difference)."
+        )
+
+    # 7. MC stats for the primary horizon (using first user)
+    primary_h = config.HORIZONS[0]
+    primary_h_users = horizons_out.get(primary_h, {})
+    first_user = next(iter(primary_h_users.keys()), None)
+    if first_user is not None:
+        mc_user_h = ((mc.get("users") or {}).get(first_user) or {}).get("horizons", {}).get(primary_h)
+        if mc_user_h:
+            p_t = mc_user_h["p_target"]
+            p_s = mc_user_h["p_stop"]
+            ev = mc_user_h["ev_pct"]
+            parts.append(
+                f"{primary_h}d Monte Carlo: P(target)={p_t*100:.0f}%, P(stop)={p_s*100:.0f}%, "
+                f"EV {ev:+.1f}%."
+            )
+
+    if not parts:
+        return {"status": "pending", "reason": "insufficient upstream data for thesis"}
+
+    return {"status": "ok", "text": " ".join(parts)}
 
 
 # ---------- input assembly ----------
