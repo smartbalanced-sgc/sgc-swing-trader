@@ -306,6 +306,44 @@ regime:
       vol_annualized:   0.90    # 90% annual vol = chaos (March 2020 territory)
       vol_of_vol:       0.50    # unstable vol — vol itself is volatile
 
+# ---------- Step 4 — Volatility forecast (GARCH(1,1)) ----------
+#
+# Standard daily-data GARCH(1,1): sigma_squared_t = omega + alpha*r_squared_(t-1) + beta*sigma_squared_(t-1).
+# We don't run MLE fitting (scipy.optimize not in our deps). Instead:
+#   - alpha, beta are literature defaults for equity daily vol
+#     (RiskMetrics-adjacent values used at most professional desks
+#     before any tuning)
+#   - sigma_LR squared (long-run variance) comes from the sample variance over
+#     the long-run window — data-driven, ticker-specific
+#   - omega is derived: omega = sigma_LR_squared * (1 - alpha - beta)
+# So the model dynamics use literature parameters but the LEVELS are
+# fully data-driven per ticker. Cleaner than MLE for v1 — no fragile
+# numerical optimization, deterministic, explainable.
+
+volatility:
+  # Window for the "current realized vol" shown in the dashboard.
+  # 60 trading days ~ 3 months — long enough to stabilize, short
+  # enough to reflect recent regime. Matches the dashboard's
+  # "60d trailing" description.
+  current_window_days: 60
+  # Window for the long-run variance estimate that GARCH mean-reverts
+  # toward. 252 trading days = 1 calendar year. Captures one full
+  # cycle of vol regimes without overweighting ancient history.
+  long_run_window_days: 252
+  # GARCH(1,1) persistence parameters — literature defaults for
+  # daily equity vol. alpha + beta = 0.95 means each shock has
+  # half-life of ~13.5 trading days (log(0.5)/log(0.95)).
+  garch_alpha: 0.05      # innovation weight on r_squared_(t-1)
+  garch_beta:  0.90      # persistence weight on sigma_squared_(t-1)
+  # Confidence-band labels keyed by anchor tier. Tier-A names have
+  # deeper price history + tighter sampling -> tighter forecast band.
+  # Surfaced in the dashboard for plain-English interpretation only;
+  # the actual MC variance fed downstream uses the point forecast.
+  confidence_band_by_tier:
+    A: tight
+    B: moderate
+    C: wide
+
 # ---------- Materiality (mirrors v17 dip engine) ----------
 
 materiality:
