@@ -21,6 +21,7 @@ and use kwargs only.
 from __future__ import annotations
 
 import os
+import re
 
 import requests
 
@@ -28,6 +29,20 @@ from src import config
 
 FMP_BASE = "https://financialmodelingprep.com/stable"
 FETCH_TIMEOUT_SEC = config.THRESHOLDS.engine.fetch_timeout_sec
+
+# Matches `apikey=...` in any string (URL, error message, log line).
+# Used to redact the API key from anything we might print or raise —
+# defense in depth, because a chat transcript or log file with a leaked
+# key can be expensive (rate-limit abuse, billing).
+_APIKEY_REGEX = re.compile(r"(apikey=)[^&\s]+", re.IGNORECASE)
+
+
+def redact(s: object) -> str:
+    """Replace `apikey=<value>` with `apikey=REDACTED` in any string.
+    Safe to call on non-strings (returns repr)."""
+    if not isinstance(s, str):
+        s = str(s)
+    return _APIKEY_REGEX.sub(r"\1REDACTED", s)
 
 
 class FMPPlanGatedError(RuntimeError):
@@ -86,8 +101,15 @@ def get(endpoint: str, symbol: str | None = None, **extra) -> object:
     if resp.status_code == 403:
         raise RuntimeError(
             f"FMP /{endpoint} returned 403 — endpoint name may be wrong, "
-            f"or key invalid. Run `python tools/probe_fmp.py NVDA` to find "
-            f"the correct endpoint names empirically."
+            f"or key invalid. Run `python tools/probe_catalyst_data.py NVDA` "
+            f"to test endpoint names empirically."
         )
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        # requests' default HTTPError message includes the request URL,
+        # which contains the apikey query param. Redact before re-raising
+        # so the key can't leak into logs, exception traces, or chat
+        # transcripts.
+        raise requests.HTTPError(redact(str(e)), response=e.response) from None
     return resp.json()

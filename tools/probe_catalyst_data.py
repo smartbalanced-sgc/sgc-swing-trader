@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data_sources import fmp  # noqa: E402
+from src.data_sources.fmp import redact  # noqa: E402
 
 
 def probe_earnings_calendar(ticker: str) -> None:
@@ -46,7 +47,7 @@ def probe_earnings_calendar(ticker: str) -> None:
     try:
         body = fmp.get("earnings-calendar", symbol=None, from_=from_date, to=to_date)
     except Exception as e:  # noqa: BLE001
-        print(f"  ERROR: {e}")
+        print(f"  ERROR: {redact(e)}")
         return
 
     if not isinstance(body, list):
@@ -78,7 +79,7 @@ def probe_grades(ticker: str) -> None:
     try:
         body = fmp.get("grades", ticker)
     except Exception as e:  # noqa: BLE001
-        print(f"  ERROR: {e}")
+        print(f"  ERROR: {redact(e)}")
         return
 
     if not isinstance(body, list):
@@ -110,7 +111,7 @@ def probe_price_target_consensus(ticker: str) -> None:
     try:
         body = fmp.get("price-target-consensus", ticker)
     except Exception as e:  # noqa: BLE001
-        print(f"  ERROR: {e}")
+        print(f"  ERROR: {redact(e)}")
         return
     print(f"  raw: {json.dumps(body, indent=2)}")
 
@@ -157,7 +158,7 @@ def probe_alternative_endpoints(ticker: str) -> None:
         try:
             body = fmp.get(endpoint, ticker, **extra)
         except Exception as e:  # noqa: BLE001
-            msg = str(e)
+            msg = redact(str(e))
             # Truncate the verbose RuntimeError text so the report stays scannable
             if len(msg) > 200:
                 msg = msg[:200] + "..."

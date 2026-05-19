@@ -176,13 +176,20 @@ def detect(ticker: str, price_data: dict, tier: str | None = None, refresh: bool
     if news:
         payload["news_bullets"] = _news_bullets(news, NEWS_HEADLINES_MAX)
 
-    # --- Sub-fetch 3: analyst rating changes + price-target consensus ---
+    # --- Sub-fetch 3: analyst data (3 endpoints) ---
+    # - `grades`: per-firm rating actions (mostly reiterations on Starter)
+    # - `grades-historical`: time-series consensus snapshots (the real
+    #   signal — "58 of 62 analysts are bullish, +2 vs last month")
+    # - `price-target-consensus`: current median/high/low PT
     grades = _safe(payload, "analyst_grades", _fetch_grades, ticker)
+    consensus = _safe(payload, "analyst_consensus", _fetch_grades_consensus, ticker)
     pt = _safe(payload, "price_target_consensus", _fetch_price_target_consensus, ticker)
     if pt:
         payload["price_target_consensus"] = pt
-    if grades is not None:
-        payload["analyst_revisions"] = _analyst_revisions_summary(grades, pt)
+    if grades is not None or consensus is not None:
+        payload["analyst_revisions"] = _analyst_revisions_summary(
+            grades or [], consensus or [], pt
+        )
 
     # --- Sub-fetch 4: short interest (own multi-layer failover) ---
     float_shares = (price_data.get("profile") or {}).get("shares_outstanding")
@@ -229,37 +236,55 @@ def _safe(payload: dict, sub_fetch_name: str, fn, *args, **kwargs):
 # ---------- FMP fetchers ----------
 
 
-# FMP Starter caps earnings-calendar HISTORICAL lookback at 1 year
-# (confirmed by FMP support 2026-05-19; exceeding it returns a 402,
-# not an empty result). 360 days = safe margin under 365 that still
-# covers 4 quarterly earnings events — sufficient for the
-# EARNINGS_REACTIONS_LOOKBACK=4 historical-reaction panel. Forward
-# lookback is uncapped on Starter and uses the full FORWARD_WINDOW_DAYS.
-_HISTORICAL_LOOKBACK_DAYS_CAP = 360
-
-
 def _fetch_earnings_events(ticker: str) -> list[dict]:
-    """Fetch earnings events for this ticker spanning past 360 days
-    through future FORWARD_WINDOW_DAYS. FMP's `earnings-calendar`
-    endpoint returns every company's events in the window; filter to
-    this ticker locally. (Filtering server-side via `symbol=` works on
-    some FMP plans but not consistently — local filter is the safe path.)
+    """Fetch earnings events for this ticker via the per-symbol
+    `/stable/earnings?symbol=X` endpoint.
 
-    Per FMP support, the FROM date must be within 1 year of today on
-    Starter; we cap at 360 days to leave margin.
+    Why not `/stable/earnings-calendar`: the cross-ticker calendar caps
+    at 4000 events per call (confirmed by FMP support 2026-05-19),
+    sorted date-descending. With our 360-day-historical-plus-90-day-
+    forward window the daily US earnings universe overflows the cap and
+    NVDA's events fall off the end (probe_catalyst_data.py 2026-05-19
+    reproduced this — 0 NVDA matches in a 4000-event response).
+
+    `/stable/earnings?symbol=X` is the per-symbol alternative FMP
+    support recommended ("Earnings Report"). Returns ~100 events
+    spanning all available history + upcoming, no pagination, no cap.
+    Filter to the relevant window locally.
     """
-    historical_days = min(HISTORY_LOOKBACK_QUARTERS * 95, _HISTORICAL_LOOKBACK_DAYS_CAP)
-    from_date = date.today() - timedelta(days=historical_days)
-    to_date = date.today() + timedelta(days=FORWARD_WINDOW_DAYS)
-    body = fmp.get(
-        "earnings-calendar",
-        symbol=None,
-        from_=from_date.isoformat(),
-        to=to_date.isoformat(),
-    )
+    body = fmp.get("earnings", ticker)
     if not isinstance(body, list):
         return []
-    return [e for e in body if (e.get("symbol") or "").upper() == ticker.upper()]
+    # Local windowing — keep events within the historical lookback +
+    # forward lookahead so downstream code doesn't choke on ancient bars.
+    historical_cutoff = (date.today() - timedelta(days=HISTORY_LOOKBACK_QUARTERS * 95)).isoformat()
+    forward_cutoff = (date.today() + timedelta(days=FORWARD_WINDOW_DAYS)).isoformat()
+    return [
+        e for e in body
+        if (e.get("date") or "")[:10] >= historical_cutoff
+        and (e.get("date") or "")[:10] <= forward_cutoff
+    ]
+
+
+def _fetch_grades_consensus(ticker: str) -> list[dict]:
+    """Fetch the historical analyst-consensus snapshots for a ticker
+    via `/stable/grades-historical?symbol=X`.
+
+    Each entry is a snapshot of how many analysts held each rating on
+    a given date, e.g.:
+      {date, analystRatingsStrongBuy, analystRatingsBuy,
+       analystRatingsHold, analystRatingsSell, analystRatingsStrongSell}
+
+    This is a STRONGER signal than counting individual rating changes
+    because FMP's per-symbol `/grades` endpoint returns predominantly
+    `action: "maintain"` entries (probe 2026-05-19 confirmed 1109/1109
+    NVDA entries were maintains, 690/690 AMAT — no upgrades/downgrades
+    visible). Watching the consensus snapshot evolve catches the
+    aggregate analyst sentiment shift that individual maintains miss.
+
+    Returns newest-first (per FMP convention)."""
+    body = fmp.get("grades-historical", ticker)
+    return body if isinstance(body, list) else []
 
 
 def _fetch_news(ticker: str) -> list[dict]:
@@ -409,98 +434,137 @@ def _news_bullets(items: list[dict], limit: int) -> list[str]:
     return out
 
 
-# Bullish-ness rank for analyst grade labels — used as the fallback
-# classifier when FMP's response doesn't include an explicit action
-# field (or uses a field name we don't recognize). Rank-up = upgrade,
-# rank-down = downgrade, same rank or unknown = "held". Covers the
-# variants we see in FMP's grade strings across firms (Goldman uses
-# "Buy", Morgan Stanley "Overweight", Wells "Outperform", etc.).
-_GRADE_RANKS: dict[str, int] = {
-    "strong sell": 0, "sell": 0,
-    "underperform": 1, "underweight": 1, "reduce": 1, "negative": 1,
-    "hold": 2, "neutral": 2, "market perform": 2, "equal weight": 2,
-    "sector perform": 2, "peer perform": 2, "in-line": 2, "in line": 2,
-    "outperform": 3, "overweight": 3, "accumulate": 3, "sector outperform": 3,
-    "long-term buy": 3, "moderate buy": 3, "positive": 3,
-    "buy": 4, "strong buy": 4, "conviction buy": 4,
-}
-
-
-def _grade_rank(grade) -> int | None:
-    """Map an analyst grade string to its bullish-ness rank, or None
-    if we don't recognize it."""
-    if not grade:
-        return None
-    return _GRADE_RANKS.get(str(grade).strip().lower())
-
-
-def _classify_grade_action(g: dict) -> str:
-    """Return one of 'upgrade', 'downgrade', or 'held' for a single
-    grade-change record. FMP's response shape varies — try several
-    likely action-field names, then fall back to inferring from
-    previousGrade vs newGrade rank comparison."""
-    # Try explicit action-like fields in priority order.
-    for key in ("action", "gradeAction", "gradeChange"):
-        v = (g.get(key) or "").strip().lower()
-        if not v:
-            continue
-        if "up" in v or "raise" in v:
-            return "upgrade"
-        if "down" in v or "cut" in v or "lower" in v:
-            return "downgrade"
-        if "main" in v or "hold" in v or "reiterat" in v or "init" in v:
-            return "held"
-
-    # Fallback: rank comparison between previousGrade and newGrade.
-    prev_rank = _grade_rank(g.get("previousGrade"))
-    new_rank = _grade_rank(g.get("newGrade"))
-    if prev_rank is not None and new_rank is not None:
-        if new_rank > prev_rank:
-            return "upgrade"
-        if new_rank < prev_rank:
-            return "downgrade"
-    return "held"
-
-
-def _analyst_revisions_summary(grades: list[dict], pt: dict | None) -> dict:
-    """Summarize rating-change activity in the last ANALYST_LOOKBACK_DAYS.
+def _analyst_revisions_summary(
+    grades: list[dict],
+    consensus_history: list[dict],
+    pt: dict | None,
+) -> dict:
+    """Summarize analyst activity using BOTH per-firm rating events and
+    the time-series consensus snapshot.
 
     Returns the shape the dashboard's _render_catalyst expects:
       {"count": int, "avg_pt": float | str, "trend": str}
 
-    `avg_pt` is the current consensus median price target (snapshot, not
-    derived from the rating changes — FMP doesn't attach a PT to each
-    change). `trend` is plain English: "mostly upgrades", "mixed",
-    "mostly downgrades".
+    Why a combined view: FMP's `/grades` endpoint mostly returns
+    "maintain" reiterations (no upgrade/downgrade visibility on
+    Starter), so counting rating changes alone hides the real story.
+    The `/grades-historical` consensus snapshot — "58 strong-buy/buy,
+    3 hold, 1 sell" — is the stronger signal because it captures where
+    the analyst community actually stands today.
+
+    `count` = number of grade events (any action) in the last
+        ANALYST_LOOKBACK_DAYS — useful as a "coverage intensity"
+        proxy (23 desks weighed in = high attention).
+    `avg_pt` = current consensus median PT.
+    `trend` = plain-English consensus narrative including the
+        snapshot distribution AND month-over-month change.
     """
     cutoff_iso = (date.today() - timedelta(days=ANALYST_LOOKBACK_DAYS)).isoformat()
-    recent = [g for g in grades if (g.get("date") or "")[:10] >= cutoff_iso]
+    recent_changes = [g for g in grades if (g.get("date") or "")[:10] >= cutoff_iso]
 
-    if not recent:
-        return {
-            "count": 0,
-            "avg_pt": (pt or {}).get("median") if pt else "?",
-            "trend": "no rating changes",
-        }
-
-    classifications = [_classify_grade_action(g) for g in recent]
-    upgrades = sum(1 for c in classifications if c == "upgrade")
-    downgrades = sum(1 for c in classifications if c == "downgrade")
-    held = len(recent) - upgrades - downgrades
-
-    if upgrades > downgrades * 1.5:
-        trend = f"mostly upgrades ({upgrades}up / {downgrades}dn / {held}held)"
-    elif downgrades > upgrades * 1.5:
-        trend = f"mostly downgrades ({upgrades}up / {downgrades}dn / {held}held)"
-    else:
-        trend = f"mixed ({upgrades}up / {downgrades}dn / {held}held)"
+    snapshot = consensus_history[0] if consensus_history else None
+    snapshot_mom = _find_consensus_snapshot_n_days_ago(
+        consensus_history, days_ago=ANALYST_LOOKBACK_DAYS
+    )
+    trend = _build_consensus_trend(snapshot, snapshot_mom, len(recent_changes))
 
     avg_pt = (pt or {}).get("median")
     return {
-        "count": len(recent),
+        "count": len(recent_changes),
         "avg_pt": round(avg_pt, 2) if isinstance(avg_pt, (int, float)) else "?",
         "trend": trend,
+        # Surface the raw snapshot too for the verdict step + tests
+        "consensus_snapshot": snapshot,
+        "consensus_snapshot_30d_ago": snapshot_mom,
     }
+
+
+def _find_consensus_snapshot_n_days_ago(
+    history: list[dict], days_ago: int
+) -> dict | None:
+    """Return the snapshot closest to `days_ago` days back, or None."""
+    if not history:
+        return None
+    target_iso = (date.today() - timedelta(days=days_ago)).isoformat()
+    # `history` is newest-first per FMP convention; find the first entry
+    # at or before the target date.
+    for snap in history:
+        d = (snap.get("date") or "")[:10]
+        if d and d <= target_iso:
+            return snap
+    return None
+
+
+def _bullishness_score(snap: dict | None) -> float | None:
+    """Score the consensus snapshot 0 (all strong-sell) to 1 (all
+    strong-buy). Returns None if the snapshot is empty/missing."""
+    if not snap:
+        return None
+    sb = snap.get("analystRatingsStrongBuy") or 0
+    b = snap.get("analystRatingsBuy") or 0
+    h = snap.get("analystRatingsHold") or 0
+    s = snap.get("analystRatingsSell") or 0
+    ss = snap.get("analystRatingsStrongSell") or 0
+    total = sb + b + h + s + ss
+    if total == 0:
+        return None
+    weighted = (sb * 4 + b * 3 + h * 2 + s * 1 + ss * 0) / (total * 4)
+    return weighted
+
+
+def _build_consensus_trend(
+    snap: dict | None, snap_prior: dict | None, recent_event_count: int
+) -> str:
+    """Plain-English narrative for the trend field combining the
+    snapshot distribution, MoM shift, and recent grade-event volume."""
+    if not snap:
+        # No snapshot — fall back to event-count narrative
+        if recent_event_count == 0:
+            return "no analyst activity in the last 30 days"
+        return f"{recent_event_count} grade event(s) in last 30 days, consensus snapshot unavailable"
+
+    sb = snap.get("analystRatingsStrongBuy") or 0
+    b = snap.get("analystRatingsBuy") or 0
+    h = snap.get("analystRatingsHold") or 0
+    s = snap.get("analystRatingsSell") or 0
+    ss = snap.get("analystRatingsStrongSell") or 0
+    bullish = sb + b
+    bearish = s + ss
+    total = sb + b + h + s + ss
+
+    if total == 0:
+        return "no analyst coverage"
+
+    bullish_pct = bullish * 100 / total
+    if bullish_pct >= 80:
+        tone = "strongly bullish"
+    elif bullish_pct >= 60:
+        tone = "bullish"
+    elif bullish_pct >= 40:
+        tone = "mixed"
+    elif bullish_pct >= 20:
+        tone = "bearish"
+    else:
+        tone = "strongly bearish"
+
+    distribution = f"{bullish} buy-or-better, {h} hold, {bearish} sell-or-worse (of {total})"
+
+    # MoM trend
+    mom = ""
+    cur_score = _bullishness_score(snap)
+    prior_score = _bullishness_score(snap_prior)
+    if cur_score is not None and prior_score is not None:
+        delta_pp = (cur_score - prior_score) * 100
+        if abs(delta_pp) < 1:
+            mom = " — stable vs 30 days ago"
+        elif delta_pp > 0:
+            mom = f" — more bullish (+{delta_pp:.1f}pp vs 30d ago)"
+        else:
+            mom = f" — less bullish ({delta_pp:.1f}pp vs 30d ago)"
+
+    activity = f"; {recent_event_count} grade event(s) in last 30 days" if recent_event_count else ""
+
+    return f"{tone}: {distribution}{mom}{activity}"
 
 
 # ---------- conviction-layer helpers ----------
@@ -634,12 +698,13 @@ def _build_engine_recommendation(payload: dict, tier: str | None) -> str:
         )
 
     ar = payload["analyst_revisions"]
-    if ar and ar.get("count"):
+    if ar and (ar.get("trend") or ar.get("count")):
         avg_pt_str = f"${ar['avg_pt']}" if isinstance(ar.get("avg_pt"), (int, float)) else "?"
+        # `trend` is now self-contained (includes the consensus
+        # distribution, MoM shift, AND recent-event count when present),
+        # so no need to prefix with a separate count.
         parts.append(
-            f"Analyst desk: {ar['count']} rating change(s) in the last "
-            f"{ANALYST_LOOKBACK_DAYS} days — {ar['trend']}. Current consensus "
-            f"price target {avg_pt_str}."
+            f"Analyst desk reads {ar['trend']}. Current consensus price target {avg_pt_str}."
         )
 
     news = payload["news_bullets"]

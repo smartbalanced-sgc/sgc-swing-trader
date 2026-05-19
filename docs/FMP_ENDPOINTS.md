@@ -29,51 +29,94 @@ not re-attempted in subsequent runs (charter §A.1 `FMP_402` set).
 
 ## Step 3 — Catalyst detection (next to be built)
 
-### Earnings calendar
+### Earnings — use the per-symbol endpoint, NOT the calendar
 
-```
-earnings-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
-```
+**Use:** `earnings?symbol=TICKER`
 
-- Response includes `date` per earnings event.
-- Returns all symbols in the window — filter client-side for the ticker
-  you want.
-- **Plan limit (Starter):** historical lookback is capped at **1 year**.
-  Requesting `from=` older than 365 days from today returns 402
-  ("not available on your plan") even though the endpoint itself IS
-  on Starter. Forward lookback is uncapped. We cap our `from=` at 360
-  days back as a safe margin — still covers 4 quarterly earnings
-  events for the historical-reactions panel
-  (see `_HISTORICAL_LOOKBACK_DAYS_CAP` in `src/pipeline/catalyst.py`).
-- **Plan limit (Starter):** US exchanges only — matches our charter
-  scope, no impact.
-- **Caveat:** BMO/AMC timing field was removed due to instability. For
-  reaction-percentage computation, use *next-trading-day close vs prior-day
-  close* (correct regardless of timing). FMP expects to restore timing
-  via an Earnings Transcript endpoint in a future release.
+This is FMP's per-symbol "Earnings Report" endpoint. Returns ~100
+events per US ticker (full available history + upcoming), one ticker
+per call, no pagination cap. Response shape:
 
-### Analyst rating changes (last 30+ days)
-
-```
-grades?symbol=TICKER
+```json
+{
+  "symbol": "NVDA", "date": "2026-05-20",
+  "epsActual": null, "epsEstimated": 1.76,
+  "revenueActual": null, "revenueEstimated": 78423370000,
+  "lastUpdated": "2026-05-18"
+}
 ```
 
-Response fields per change (observed empirically — see below):
-- `date` — date of the rating change
-- `gradingCompany` — brokerage firm name (Goldman, Morgan Stanley, etc.)
-- `previousGrade`, `newGrade` — old and new rating labels (always present)
-- Action field — **field name is inconsistent across responses**. May
-  appear as `action`, `gradeAction`, or `gradeChange`, sometimes
-  missing entirely. Our parser
-  (`_classify_grade_action` in `src/pipeline/catalyst.py`) checks all
-  three names AND falls back to ranking `previousGrade` vs `newGrade`
-  on a bullishness scale (Sell=0, Hold=2, Buy=4, etc.) when no action
-  field is present. This is more reliable than trusting a single field.
+**Do NOT use `earnings-calendar` (cross-ticker calendar).** It's
+available on Starter but has properties that make it unusable for our
+per-ticker need (confirmed by FMP support and verified empirically
+via `tools/probe_catalyst_data.py` 2026-05-19):
 
-**Caveat:** No price target attached to each change. To pair "Goldman
-upgraded" with "new PT $290" in the narrative, render two separate
-elements: the rating change from `grades`, and the current consensus PT
-from `price-target-consensus` (below).
+1. **4000-event cap per call** — overflowing windows silently drop
+   events from the start of the date range. Our 360+90 day window for
+   ~6500 US-listed tickers overflows the cap; NVDA's events were
+   missing entirely from the response.
+2. **90-day maximum date range** per call — broader queries return a
+   402 (which is what we hit on 2026-05-18 with a 450-day window).
+3. **Historical lookback capped at 1 year** on Starter.
+
+If we ever need a cross-ticker calendar (e.g., a market-wide "what's
+reporting tomorrow" sweep), use pagination via `&page=0,1,2,...` and
+split the date range into ≤90-day chunks.
+
+**Caveat (both endpoints):** BMO/AMC timing field was removed due to
+instability. For reaction-percentage computation, use *next-trading-day
+close vs prior-day close* (correct regardless of timing). FMP expects
+to restore timing via an Earnings Transcript endpoint in a future
+release.
+
+### Analyst data — use BOTH `grades-historical` and `grades`
+
+The strong signal is **the consensus snapshot trend** (`grades-historical`),
+not the per-firm action stream (`grades`). On Starter the per-firm
+stream is dominated by reiterations (verified empirically: 1109/1109
+NVDA entries and 690/690 AMAT entries on `/grades` had
+`action: "maintain"` 2026-05-19 — no upgrades or downgrades visible).
+FMP support confirmed there is NO per-symbol upgrades/downgrades
+endpoint on Starter — the bulk one exists but is Premium-only.
+
+**`grades-historical?symbol=TICKER`** — the consensus snapshot trend
+(the signal we actually want):
+
+```json
+{
+  "date": "2026-05-01", "symbol": "NVDA",
+  "analystRatingsStrongBuy": 10, "analystRatingsBuy": 48,
+  "analystRatingsHold": 3, "analystRatingsSell": 1,
+  "analystRatingsStrongSell": 0
+}
+```
+
+Returns ~85 monthly snapshots. We use [0] for the current snapshot and
+binary-search for the snapshot from 30 days ago to compute a
+bullishness MoM delta ("more bullish (+1.2pp vs 30d ago)"). See
+`_build_consensus_trend` in `src/pipeline/catalyst.py`.
+
+**`grades?symbol=TICKER`** — per-firm rating actions (kept for the
+coverage-intensity proxy):
+
+```json
+{
+  "date": "2026-05-18", "symbol": "NVDA",
+  "gradingCompany": "Wedbush",
+  "previousGrade": "Outperform", "newGrade": "Outperform",
+  "action": "maintain"
+}
+```
+
+On Starter this is almost entirely `action: "maintain"` (no upgrades
+or downgrades visible). We use the count as a "how many desks weighed
+in this month" proxy — high count = high attention. The action enum
+is essentially "maintain" everywhere on Starter, so we don't try to
+extract upgrade/downgrade signal from it.
+
+**Caveat:** No price target attached to each change. Use
+`price-target-consensus` (below) for the current consensus PT
+separately.
 
 ### Current analyst price-target consensus
 
