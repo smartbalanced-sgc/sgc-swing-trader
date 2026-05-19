@@ -111,9 +111,19 @@ conviction:
 
   # Layer 1 — edge.
   edge:
-    # Lottery filter: if P(target) - P(stop) is non-positive, edge = 0
-    # regardless of EV. Eliminates trades where huge upside × tiny
-    # probability inflates EV on a structurally bad bet.
+    # Lottery filter: trade is a "lottery" only when BOTH P(target) -
+    # P(stop) is at-or-below this threshold AND EV (units of risk) is
+    # non-positive. The AND condition matters - our vol-scaled targets
+    # (1 sigma reward / 0.7 sigma risk) structurally produce
+    # P(target) < P(stop) by design (stop is closer to current), but
+    # the asymmetric distance gives POSITIVE EV when drift cooperates.
+    # Earlier behavior (block on prob_diff alone) made every watching
+    # default a SKIP; the EV-aware version keeps the original intent
+    # (block low-prob × huge-payoff lotteries with negative EV) while
+    # letting genuine swing setups through. Modify both fields when
+    # tuning: threshold for "how poor probability has to be" + the
+    # EV check (in conviction.py) for "AND only when expectation is
+    # also bad."
     lottery_filter_min_prob_diff: 0.0
     # Past the lottery filter: ev-weighted with a token probability term.
     # Swing trading is asymmetric-payoff-by-construction, so lean EV.
@@ -153,10 +163,20 @@ conviction:
   vetoes:
     # The score above which ENTER is the default label (assuming no
     # veto). Below: WAIT (close to threshold) or SKIP (far below).
-    enter_score_threshold: 0.70
-    # Hysteresis band below threshold — between this and the threshold
+    #
+    # Calibration: with ev_weight=0.70 and ev_cap_units_of_risk=3.0,
+    # realistic swing-trade edges land in the 0.10-0.35 band. A "strong"
+    # setup (P(target)=40%, P(stop)=30%, EV_norm=+0.30 = +3% EV vs 10%
+    # stop) produces edge ~0.24. A "lock-in" setup (P(target)=70%,
+    # P(stop)=20%, EV_norm=+1.5) produces edge ~0.55. Setting the
+    # threshold at 0.30 means ENTER fires on genuinely above-average
+    # setups, not marginal ones. The previous threshold (0.70) was
+    # unreachable by any realistic 30d trade and made every output
+    # a SKIP regardless of EV - effectively breaking the engine.
+    enter_score_threshold: 0.30
+    # Hysteresis band below threshold - between this and the threshold
     # the verdict is WAIT; below this it's SKIP.
-    wait_score_floor: 0.55
+    wait_score_floor: 0.10
 
     # Catalyst proximity (Layer 2 haircut + Layer 3 ENTER veto).
     # The two effects address different problems:

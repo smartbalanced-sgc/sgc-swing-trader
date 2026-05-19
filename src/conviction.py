@@ -99,7 +99,21 @@ def _layer1_edge(inputs: dict, edge_cfg) -> dict:
     ev_norm = inputs["ev_normalized"]
 
     prob_diff = p_target - p_stop
-    lottery_filter_failed = prob_diff <= edge_cfg.lottery_filter_min_prob_diff
+    # Lottery filter: trade is a "lottery" (huge upside × tiny probability
+    # inflating EV on a structurally bad bet) only when BOTH the
+    # probability difference is poor AND the EV is non-positive. A trade
+    # with negative prob_diff but POSITIVE EV is not a lottery — it's
+    # a legitimate asymmetric-payoff swing trade, which our vol-scaled
+    # targets (1 sigma reward / 0.7 sigma risk) produce by design. The
+    # earlier strict filter (prob_diff alone) blocked every watching
+    # default and made the engine output meaningless SKIPs across the
+    # board. Both conditions together preserve the original intent
+    # (block tiny-probability × huge-payoff lotteries with negative EV)
+    # while letting real swing setups through.
+    lottery_filter_failed = (
+        prob_diff <= edge_cfg.lottery_filter_min_prob_diff
+        and ev_norm <= 0.0
+    )
 
     # Normalize EV to [0, 1] by capping at the configured units-of-risk
     # ceiling. EV below 0 gets clipped to 0 (the lottery filter handles

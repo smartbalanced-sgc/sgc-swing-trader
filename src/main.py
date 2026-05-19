@@ -181,14 +181,16 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
         lambda: analytic_verifier.verify(ticker, snap),
     )
 
-    # Step 8 — per-user verdicts. Branches over watchlist holders.
-    holders = watchlist_entry.get("holders") or {}
-    snap["verdict"] = {}
-    for user, state in holders.items():
-        snap["verdict"][user] = _run_safely(
-            f"verdict.{user}",
-            lambda u=user, s=state: verdict.synthesize(ticker, snap, u, s),
-        )
+    # Step 8 — verdict synthesis. Produces the full per-ticker
+    # conviction block (horizons → users → {breakdown, targets})
+    # that the dashboard's Action and Conviction panels render.
+    # Per-user branching happens INSIDE verdict.synthesize() so the
+    # orchestrator stays thin and the conviction block lives as one
+    # coherent dict rather than a loop-built collection.
+    snap["conviction"] = _run_safely(
+        "verdict",
+        lambda: verdict.synthesize(ticker, snap, watchlist_entry),
+    )
 
     # Drop the private price-data pass-through before snapshot
     # serialization (keeps snapshot files small).
@@ -240,7 +242,7 @@ def _pending_block(reason: str) -> dict:
         "price_levels": {"status": "pending", "reason": reason},
         "daily_path": {"status": "pending", "reason": reason},
         "analytic_verifier": {"status": "pending", "reason": reason},
-        "verdict": {},
+        "conviction": {"status": "pending", "reason": reason},
     }
 
 
