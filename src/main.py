@@ -144,7 +144,7 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
     )
     snap["fair_value"] = _run_safely(
         "fair_value",
-        lambda: fair_value.estimate(ticker, price_data),
+        lambda: fair_value.estimate(ticker, price_data, tier=anchor_tier),
     )
 
     # Targets — per-user target/stop derivation. Runs after volatility

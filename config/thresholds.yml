@@ -466,10 +466,33 @@ fair_value:
     terminal_growth: 0.025
     # Years of explicit FCF projection before terminal value.
     projection_years: 5
-    # Cap the projected growth rate. Above 25%/yr is heroic for a
-    # 5-year horizon; cap protects against extrapolating recent
-    # outliers (e.g. NVDA's recent 100%+ FCF growth) into perpetuity.
-    growth_rate_cap: 0.25
+    # Tier-aware growth cap. Mature mega-caps can't sustain 25%
+    # growth for 5 years - the base-size constraint dominates (NVDA
+    # at 25%/yr for 5 years reaches 3x its current $5T market cap,
+    # larger than the entire S&P 500). Early-stage names CAN sustain
+    # higher growth as they scale from a low base. Bands:
+    #   A: 15% - mature mega-cap (great-year sustainable rate)
+    #   B: 25% - mid-cap growth (achievable mid-cycle)
+    #   C: 40% - small-cap catalyst (early-stage scaling band)
+    growth_rate_cap_by_tier:
+      A: 0.15
+      B: 0.25
+      C: 0.40
+    # Default cap when ticker has no tier label.
+    growth_rate_cap_default: 0.25
+    # Growth estimator method:
+    #   "cagr"       - compound annual growth rate from endpoints
+    #                  over the FCF history window. Smooths single-
+    #                  year cyclical dips (e.g. AMAT's chip-cycle
+    #                  down-years would no longer project a -1.4%
+    #                  perpetual decline that anchors DCF absurdly
+    #                  low). Default.
+    #   "median_yoy" - median of YoY growth rates. More sensitive to
+    #                  recent year's data; the previous default.
+    #                  Retained as the auto-fallback when any FCF
+    #                  value is non-positive (geometric mean math
+    #                  breaks otherwise).
+    growth_estimator: cagr
     # If TTM FCF is negative, DCF is mathematically meaningless
     # (you'd be discounting losses forever). Skip the method and
     # let the others do the work.

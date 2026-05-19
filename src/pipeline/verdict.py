@@ -262,6 +262,23 @@ def _build_thesis(snap: dict, horizons_out: dict) -> dict:
             f"({decisive} drives the difference)."
         )
 
+    # 6.5 Fair value premium (only when meaningful — skip the "near
+    # fair" middle band where there's no signal worth surfacing).
+    fv_block = snap.get("fair_value") or {}
+    if fv_block.get("status") == "ok":
+        sigmas = fv_block.get("premium_sigmas", 0.0)
+        range_mean = fv_block.get("range_mean", 0.0)
+        if abs(sigmas) >= 1.0 and range_mean:
+            if sigmas >= 2.0:
+                phrase = f"current at {sigmas:+.1f}sigma — Layer-3 FV veto FIRES"
+            elif sigmas >= 1.0:
+                phrase = f"current at {sigmas:+.1f}sigma — modest premium"
+            elif sigmas >= -2.0:
+                phrase = f"current at {sigmas:+.1f}sigma — meaningfully cheap"
+            else:
+                phrase = f"current at {sigmas:+.1f}sigma — deeply discounted"
+            parts.append(f"Fair value mean ${range_mean:.2f} ({phrase}).")
+
     # 7. MC stats for the primary horizon (using first user)
     primary_h = config.HORIZONS[0]
     primary_h_users = horizons_out.get(primary_h, {})

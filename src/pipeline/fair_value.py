@@ -119,7 +119,12 @@ SINGLE_METHOD_SIGMA_PCT = _FV.single_method_sigma_pct
 # ---------- public API ----------
 
 
-def estimate(ticker: str, price_data: dict, refresh: bool = False) -> dict:
+def estimate(
+    ticker: str,
+    price_data: dict,
+    tier: str | None = None,
+    refresh: bool = False,
+) -> dict:
     """Triangulate fair value across DCF + forward P/E peers + analyst PT.
 
     Args:
@@ -127,6 +132,10 @@ def estimate(ticker: str, price_data: dict, refresh: bool = False) -> dict:
         price_data: output of src.pipeline.data.fetch(ticker). Needs
             `profile` (for shares_outstanding, price) and `prices`
             (for current price fallback).
+        tier: anchor tier from watchlist (A/B/C). Used by DCF for
+            tier-aware growth-rate caps - mature mega-caps (A) can't
+            sustain the same growth as early-stage names (C). When
+            None, falls back to growth_rate_cap_default.
         refresh: bypass the disk cache and force a fresh fetch.
 
     Returns the payload described in the module docstring.
@@ -147,7 +156,7 @@ def estimate(ticker: str, price_data: dict, refresh: bool = False) -> dict:
 
     if _FV.dcf.enabled:
         _run_method(
-            "DCF", lambda: _dcf(ticker, profile),
+            "DCF", lambda: _dcf(ticker, profile, tier=tier),
             methods_detail, method_errors,
         )
 
@@ -227,8 +236,8 @@ def _run_method(name: str, fn, methods_out: list, errors_out: list) -> None:
 # ---------- Method 1: DCF ----------
 
 
-def _dcf(ticker: str, profile: dict) -> dict | None:
-    """2-stage DCF using TTM FCF and median historical growth."""
+def _dcf(ticker: str, profile: dict, tier: str | None = None) -> dict | None:
+    """2-stage DCF using TTM FCF and a tier-aware growth assumption."""
     cfg = _FV.dcf
     cfs_body = fmp.get(
         "cash-flow-statement", ticker, period="annual", limit=5
@@ -254,7 +263,13 @@ def _dcf(ticker: str, profile: dict) -> dict | None:
         capex_y = float(row.get("capitalExpenditure") or 0.0)
         fcf_history.append(ocf_y + capex_y)
 
-    growth_rate = _estimate_growth_rate(fcf_history, cap=cfg.growth_rate_cap)
+    # Tier-aware growth cap
+    growth_cap = _resolve_growth_cap(tier)
+    growth_rate, estimator_used = _estimate_growth_rate(
+        fcf_history,
+        cap=growth_cap,
+        primary=getattr(cfg, "growth_estimator", "cagr"),
+    )
 
     # 2-stage DCF math
     r = cfg.discount_rate
@@ -292,7 +307,9 @@ def _dcf(ticker: str, profile: dict) -> dict | None:
             "fcf_ttm": fcf_ttm,
             "fcf_history_billions": [round(v / 1e9, 3) for v in fcf_history],
             "growth_rate_estimated": growth_rate,
-            "growth_rate_cap": cfg.growth_rate_cap,
+            "growth_rate_cap_used": growth_cap,
+            "growth_rate_cap_tier": tier,
+            "growth_estimator_used": estimator_used,
             "discount_rate": r,
             "terminal_growth": g_terminal,
             "projection_years": n,
@@ -303,15 +320,56 @@ def _dcf(ticker: str, profile: dict) -> dict | None:
     }
 
 
-def _estimate_growth_rate(fcf_history: list[float], cap: float) -> float:
-    """Median YoY growth from historical FCF, clipped to [-10%, +cap].
+def _resolve_growth_cap(tier: str | None) -> float:
+    """Pull the tier-specific growth cap, falling back to the default."""
+    by_tier = getattr(_FV.dcf, "growth_rate_cap_by_tier", None)
+    if tier and by_tier is not None:
+        cap = getattr(by_tier, tier, None)
+        if cap is not None:
+            return float(cap)
+    default = getattr(_FV.dcf, "growth_rate_cap_default", None)
+    if default is not None:
+        return float(default)
+    # Backwards-compat with older configs that only had `growth_rate_cap`
+    legacy = getattr(_FV.dcf, "growth_rate_cap", None)
+    return float(legacy) if legacy is not None else 0.25
 
-    Median (not mean) is robust to one-year outliers like a pandemic
-    dip or a special-charge year. Cap prevents 100%+ recent growth
-    from being extrapolated as perpetual.
+
+def _estimate_growth_rate(
+    fcf_history: list[float],
+    cap: float,
+    primary: str = "cagr",
+) -> tuple[float, str]:
+    """Estimate forward growth from historical FCF.
+
+    Two estimators:
+      - "cagr"       - (final / initial) ** (1/years) - 1. Smooths
+                       single-year cyclical dips because only endpoints
+                       matter; better for cyclical names like
+                       semi-cap-equipment where a down-year shouldn't
+                       drag the perpetual-growth assumption.
+      - "median_yoy" - median of YoY growth rates. More reactive to
+                       recent data; sensitive to the most recent year.
+
+    CAGR auto-falls-back to median_yoy when any FCF value is non-
+    positive (geometric mean math breaks). Returns (growth_rate,
+    estimator_used) so the dashboard can surface which method drove
+    the DCF.
+
+    Either way, the result is clipped to [-10%, +cap].
     """
     if len(fcf_history) < 2:
-        return 0.05  # default modest growth when history too short
+        return 0.05, "default-modest"
+
+    if primary == "cagr" and all(v > 0 for v in fcf_history):
+        initial = fcf_history[0]
+        final = fcf_history[-1]
+        years = len(fcf_history) - 1
+        cagr = (final / initial) ** (1.0 / years) - 1.0
+        return max(-0.10, min(cagr, cap)), "cagr"
+
+    # Either primary was median_yoy OR CAGR couldn't compute due to
+    # non-positive values (e.g. one cash-burn year in the middle).
     growth_rates = []
     for i in range(1, len(fcf_history)):
         prev = fcf_history[i - 1]
@@ -319,10 +377,10 @@ def _estimate_growth_rate(fcf_history: list[float], cap: float) -> float:
         if prev > 0 and cur > 0:
             growth_rates.append(cur / prev - 1.0)
     if not growth_rates:
-        return 0.05
+        return 0.05, "default-modest"
     growth_rates.sort()
     median = growth_rates[len(growth_rates) // 2]
-    return max(-0.10, min(median, cap))
+    return max(-0.10, min(median, cap)), "median_yoy"
 
 
 # ---------- Method 2: Forward P/E peers ----------
@@ -565,10 +623,12 @@ def _build_narrative(
     for m in methods:
         if m["name"] == "DCF":
             d = m["details"]
+            tier_str = f" tier-{d['growth_rate_cap_tier']}" if d.get("growth_rate_cap_tier") else ""
+            est_str = d.get("growth_estimator_used", "?")
             parts.append(
                 f"DCF $${m['value']:.2f}: TTM FCF ${d['fcf_ttm']/1e9:.2f}B, "
                 f"growth {d['growth_rate_estimated']*100:.1f}%/yr "
-                f"(capped at {d['growth_rate_cap']*100:.0f}%), "
+                f"({est_str} estimator, capped at {d['growth_rate_cap_used']*100:.0f}%{tier_str}), "
                 f"discount {d['discount_rate']*100:.1f}%, terminal {d['terminal_growth']*100:.1f}%."
             )
         elif m["name"] == "Forward P/E peers":
@@ -681,13 +741,20 @@ def _print_summary(ticker: str, payload: dict) -> None:
 
 def main() -> int:
     from src.pipeline import data as data_step
+    import yaml
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="Fair value smoke test.")
     parser.add_argument("tickers", nargs="+", help="ticker(s) to value")
     parser.add_argument("--refresh", action="store_true", help="bypass disk cache")
+    parser.add_argument("--tier", default=None, help="anchor tier A/B/C; else taken from watchlist")
     args = parser.parse_args()
+
+    watchlist = {}
+    if config.WATCHLIST_PATH.exists():
+        with config.WATCHLIST_PATH.open() as f:
+            watchlist = yaml.safe_load(f) or {}
 
     exit_code = 0
     for ticker in args.tickers:
@@ -699,8 +766,9 @@ def main() -> int:
             traceback.print_exc()
             exit_code = 1
             continue
+        tier = args.tier or (watchlist.get(ticker) or {}).get("tier")
         try:
-            payload = estimate(ticker, price_data, refresh=args.refresh)
+            payload = estimate(ticker, price_data, tier=tier, refresh=args.refresh)
         except Exception as e:  # noqa: BLE001
             print(f"\nERROR estimating {ticker}: {e}", file=sys.stderr)
             traceback.print_exc()
