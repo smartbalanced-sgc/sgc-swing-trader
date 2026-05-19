@@ -36,6 +36,7 @@ from src.pipeline import (
     fair_value,
     monte_carlo,
     regime,
+    targets,
     verdict,
     volatility,
 )
@@ -145,10 +146,36 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
         "fair_value",
         lambda: fair_value.estimate(ticker, price_data),
     )
+
+    # Targets — per-user target/stop derivation. Runs after volatility
+    # (vol-scaled defaults need the GARCH 30d forecast) and before MC
+    # (which tests first-passage against these levels). For `entered`
+    # users targets come from watchlist; for `watching` users they're
+    # vol-scaled defaults from src/pipeline/targets.py.
+    # MC needs raw price data to compute RSI and 60d high for the
+    # price_levels panel — stash on snap under a private key the
+    # snapshot writer drops before serialization.
+    snap["_price_data"] = price_data
+    snap["targets"] = _run_safely(
+        "targets",
+        lambda: targets.derive(ticker, watchlist_entry, snap),
+    )
+
     snap["monte_carlo"] = _run_safely(
         "monte_carlo",
-        lambda: monte_carlo.simulate(ticker, snap),
+        lambda: monte_carlo.simulate(ticker, snap, run_date),
     )
+    # Unpack MC's price_levels and daily_path sub-blocks into their
+    # own top-level snap keys (where the dashboard renderers look).
+    # Done with .pop() so the duplicated data doesn't double the
+    # serialized snapshot size.
+    if snap["monte_carlo"].get("status") == "ok":
+        snap["price_levels"] = snap["monte_carlo"].pop("price_levels", {"status": "pending"})
+        snap["daily_path"] = snap["monte_carlo"].pop("daily_path", {"status": "pending"})
+    else:
+        snap["price_levels"] = {"status": "pending", "reason": "monte_carlo not ok"}
+        snap["daily_path"] = {"status": "pending", "reason": "monte_carlo not ok"}
+
     snap["analytic_verifier"] = _run_safely(
         "analytic_verifier",
         lambda: analytic_verifier.verify(ticker, snap),
@@ -162,6 +189,10 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
             f"verdict.{user}",
             lambda u=user, s=state: verdict.synthesize(ticker, snap, u, s),
         )
+
+    # Drop the private price-data pass-through before snapshot
+    # serialization (keeps snapshot files small).
+    snap.pop("_price_data", None)
 
     return snap
 
@@ -204,7 +235,10 @@ def _pending_block(reason: str) -> dict:
         "catalyst": {"status": "pending", "reason": reason},
         "volatility": {"status": "pending", "reason": reason},
         "fair_value": {"status": "pending", "reason": reason},
+        "targets": {"status": "pending", "reason": reason},
         "monte_carlo": {"status": "pending", "reason": reason},
+        "price_levels": {"status": "pending", "reason": reason},
+        "daily_path": {"status": "pending", "reason": reason},
         "analytic_verifier": {"status": "pending", "reason": reason},
         "verdict": {},
     }

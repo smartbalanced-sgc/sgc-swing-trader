@@ -344,6 +344,66 @@ volatility:
     B: moderate
     C: wide
 
+# ---------- Targets (target/stop derivation for watching users) ----------
+#
+# For `entered` users we use the user-specified target/stop from
+# watchlist.yml (set during the `bought` flow). For `watching` users
+# we have to PROPOSE target/stop levels so MC can compute P(target),
+# P(stop), EV — without them the system has no signal.
+#
+# Default approach: vol-scaled bands using the GARCH 30d vol forecast.
+#   target = current * exp(+m * sigma * sqrt(horizon/252))
+#   stop   = current * exp(-k * sigma * sqrt(horizon/252))
+# with m > k for asymmetric reward:risk (the swing-trader's
+# bread-and-butter — risk less than you stand to gain).
+#
+# Why vol-scaled and not round percentages: IONQ moves ~6%/day and
+# NVDA moves ~2%/day. A round -5% stop is one bad IONQ day vs.
+# multiple NVDA standard deviations. Vol-scaling makes the levels
+# proportional to each ticker's actual character.
+
+targets:
+  # Multipliers in units of sigma (vol). Calibrated for SWING-TRADE
+  # achievability over a 30-day horizon — not portfolio-level R/R
+  # framing. Reasoning:
+  #
+  #   Target at +2 sigma over 30d for a 40%/yr vol stock = +32%, which
+  #   only ~5% of paths would touch in 30 days (2-sigma events are
+  #   rare by construction). Most paths end in "neither" territory ->
+  #   no signal. Reasonable swing-trade targets sit at ~+1 sigma,
+  #   where P(touched) ~40% and the trade actually has a real shot.
+  #
+  #   target=+1 sigma, stop=-0.7 sigma keeps the asymmetry (1.43:1
+  #   reward:risk in distance terms) while making both levels hittable
+  #   with meaningful probability. The asymmetric distance + drift
+  #   tilt from regime is what produces positive EV in the conviction
+  #   layer, not the centroid spread alone.
+  target_sigma_multiplier: 1.0   # +1 sigma -> target
+  stop_sigma_multiplier:   0.7   # -0.7 sigma -> stop
+  # Horizon to use when scaling sigma -> price level. Using the
+  # primary (30d) horizon means target/stop are stable across both
+  # 30d and 60d MC sims — they don't widen further for the longer
+  # horizon (which would make 60d P(target) artificially low).
+  scaling_horizon_days: 30
+
+# ---------- Step 6 — Monte Carlo simulation ----------
+
+monte_carlo:
+  # Seed strategy: derived from hash((ticker, run_date)) so same-day
+  # re-runs are reproducible but different days/tickers are independent.
+  # Documented here for discoverability; logic baked into module.
+  seed_strategy: ticker_date_hash
+  # Whether to overlay an empirical earnings-reaction jump on scheduled
+  # earnings days that fall within the simulation horizon. On = the
+  # GBM step for that day is REPLACED with a random draw from the
+  # ticker's historical_reactions (from the catalyst step). Off = pure
+  # GBM throughout. Keep on for production; off useful for ablation
+  # studies ("how much does the jump overlay change P(stop)?").
+  earnings_jump_overlay: true
+  # How many forward trading days to expose in the dashboard's
+  # daily-path summary panel. Matches the 60d secondary horizon.
+  daily_path_days: 60
+
 # ---------- Materiality (mirrors v17 dip engine) ----------
 
 materiality:
