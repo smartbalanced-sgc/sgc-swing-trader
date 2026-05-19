@@ -115,6 +115,66 @@ def probe_price_target_consensus(ticker: str) -> None:
     print(f"  raw: {json.dumps(body, indent=2)}")
 
 
+# ---- ALTERNATIVE ENDPOINTS (probing for replacements) ----
+#
+# earnings-calendar is paginated at 4000 events and clips off events
+# before the latest 4000. grades only returns "maintain" entries on
+# Starter. We need replacements. Probe candidate endpoints.
+
+
+_ALTERNATIVE_ENDPOINTS = [
+    # ---- earnings replacements ----
+    # FMP commonly has a per-symbol earnings endpoint that bypasses
+    # the calendar's pagination cap entirely.
+    ("earnings", {}),
+    ("earnings", {"limit": 20}),
+    ("historical-earning-calendar", {"limit": 20}),
+    ("earnings-surprises", {}),
+    ("earnings-transcript-latest", {}),
+    # ---- analyst-rating-change replacements ----
+    # The reiterations-only result on /grades suggests upgrades and
+    # downgrades live on a different endpoint name.
+    ("upgrades-downgrades", {}),
+    ("upgrades-downgrades-consensus", {}),
+    ("grades-historical", {}),
+    ("grades-latest-news", {}),
+    ("stock-grade-news", {}),
+    ("analyst-stock-recommendations", {}),
+    ("rating-news", {}),
+]
+
+
+def probe_alternative_endpoints(ticker: str) -> None:
+    """For each candidate endpoint, attempt the call and report:
+      - HTTP success vs error (with status code on 4xx)
+      - response shape (list/dict, length)
+      - first entry's fields and a sample value
+    Failures are non-fatal — we want to discover what works on Starter."""
+    print(f"\n=== {ticker} :: ALTERNATIVE ENDPOINT PROBES ===")
+    for endpoint, extra in _ALTERNATIVE_ENDPOINTS:
+        label = endpoint + (f"?{','.join(f'{k}={v}' for k, v in extra.items())}" if extra else "")
+        print(f"\n  --- /{label} ---")
+        try:
+            body = fmp.get(endpoint, ticker, **extra)
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            # Truncate the verbose RuntimeError text so the report stays scannable
+            if len(msg) > 200:
+                msg = msg[:200] + "..."
+            print(f"    ERROR: {msg}")
+            continue
+        if isinstance(body, list):
+            print(f"    OK — list of {len(body)} entries")
+            if body:
+                print(f"    keys in first entry: {sorted(body[0].keys())}")
+                print(f"    first entry: {json.dumps(body[0], indent=6)}")
+        elif isinstance(body, dict):
+            print(f"    OK — dict with keys: {sorted(body.keys())}")
+            print(f"    raw: {json.dumps(body, indent=6)[:500]}")
+        else:
+            print(f"    OK — unexpected type {type(body).__name__}: {body!r:.200}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tickers", nargs="+", help="ticker symbols to probe")
@@ -124,6 +184,7 @@ def main() -> int:
         probe_earnings_calendar(t)
         probe_grades(t)
         probe_price_target_consensus(t)
+        probe_alternative_endpoints(t)
     return 0
 
 
