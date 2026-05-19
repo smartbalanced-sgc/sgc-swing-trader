@@ -225,6 +225,87 @@ regime:
     sideways:       0.05
     crisis:         0.00
 
+  # ---- Classifier configuration (used by src/pipeline/regime.py) ----
+  #
+  # The regime detector is a feature-centroid + softmax classifier, NOT
+  # a Hidden Markov Model. Three observable features are computed from
+  # daily log-returns over `feature_window_days`:
+  #   1. trend_annualized   — slope of log-price vs day index, annualized
+  #   2. vol_annualized     — stdev of daily log-returns × sqrt(252)
+  #   3. vol_of_vol         — stdev of rolling-`vol_of_vol_inner_window`-day
+  #                            vol across the feature window, annualized
+  # Each state has a centroid in this 3-D feature space (below). The
+  # detector scores the observed features against every centroid by
+  # normalized Euclidean distance, applies softmax (with `softmax_
+  # temperature` controlling decisiveness) to get probabilities, and
+  # picks argmax. Confidence is the winning probability.
+  #
+  # Why this approach over an HMM: explainable, deterministic, no exotic
+  # dependencies, calibratable here without code changes. See module
+  # docstring in src/pipeline/regime.py for the full rationale.
+
+  # Window for the primary feature computation (trend slope + vol).
+  feature_window_days: 60
+  # Inner window for vol-of-vol — rolling-vol window that's then
+  # itself rolled across feature_window_days. 20 = roughly one trading
+  # month, captures structural vol shifts without intraday noise.
+  vol_of_vol_inner_window: 20
+  # Lookback for the days_in_regime computation — walks backward,
+  # re-classifying each day to find the most recent flip into the
+  # current state.
+  days_in_regime_lookback: 60
+  # Softmax temperature — lower = more decisive (sharper probabilities),
+  # higher = smoother (less confident at boundaries). 0.5 makes a 2x
+  # distance difference roughly translate to a 7:1 probability ratio,
+  # which is decisive enough to fire the 70% confidence veto threshold
+  # when the call is clean but stays below it at genuine boundaries.
+  softmax_temperature: 0.5
+  # Per-feature normalization scale — divides the (observed - centroid)
+  # delta before computing distance, so each dimension contributes
+  # roughly equally despite very different natural units. Calibrated so
+  # a "centroid-to-centroid typical span" in each feature produces ~1.0
+  # in normalized space:
+  #   trend span uptrend(+0.15) → downtrend(-0.25) ≈ 0.40  → scale 0.40
+  #   vol   span uptrend_quiet(0.20) → crisis(0.90) ≈ 0.70 → scale 0.70
+  #   vov   span uptrend_quiet(0.05) → crisis(0.50) ≈ 0.45 → scale 0.45
+  # Earlier scales (0.5/1.0/0.5) over-weighted trend so crisis cases
+  # with steep decline got mis-classified as downtrend even when vol
+  # and vol-of-vol both pointed to crisis. These scales restore balance.
+  normalization_scale:
+    trend_annualized: 0.40
+    vol_annualized:   0.70
+    vol_of_vol:       0.45
+
+  # Feature centroids per state. The classifier assigns the state
+  # whose centroid is nearest to the observed features. Tune these to
+  # change regime sensitivity. Values are hand-calibrated to long-run
+  # broad-market averages; each ticker is classified against the same
+  # centroids (no per-ticker calibration in v1 — the tier classifier
+  # already captures per-ticker character separately).
+  centroids:
+    uptrend_quiet:
+      trend_annualized: 0.15    # +15% annual price slope
+      vol_annualized:   0.20    # 20% annual vol (broad-market normal)
+      vol_of_vol:       0.05    # very stable vol — predictable regime
+    uptrend_noisy:
+      trend_annualized: 0.15
+      vol_annualized:   0.45    # elevated but not crisis vol
+      vol_of_vol:       0.15
+    downtrend:
+      trend_annualized: -0.25   # sustained -25% annual decline
+      vol_annualized:   0.40    # elevated (bear-market vol)
+      vol_of_vol:       0.20
+    sideways:
+      trend_annualized: 0.00    # no directional drift
+      vol_annualized:   0.25
+      vol_of_vol:       0.08
+    crisis:
+      trend_annualized: -0.25   # crisis usually IS steeply negative; this
+                                # is also the downtrend trend, so vol/vov
+                                # have to do the work of distinguishing
+      vol_annualized:   0.90    # 90% annual vol = chaos (March 2020 territory)
+      vol_of_vol:       0.50    # unstable vol — vol itself is volatile
+
 # ---------- Materiality (mirrors v17 dip engine) ----------
 
 materiality:
