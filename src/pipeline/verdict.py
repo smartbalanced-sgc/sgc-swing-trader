@@ -35,25 +35,26 @@ Default-handling strategy for not-yet-implemented upstream steps:
     values after the snapshot store has accumulated >= 5 nights of
     history (per config.trajectory.smoothing_window_nights).
 
-Output schema (matches `src/dashboard.py:_render_conviction` and
-`_render_action` expectations):
+Output schema (matches `src/dashboard.py:_render_conviction`,
+`_render_action`, and `_conviction_headline` expectations — note the
+horizon-dict is keyed DIRECTLY by user, not wrapped in a "users"
+sub-key, because the headline summary iterates `horizons[h].keys()`
+to find the first user and a wrapper would break that):
 
     {
         "status": "ok",
         "fetched_at": ISO timestamp,
         "horizons": {
             30: {
-                "users": {
-                    "aidy": {
-                        "breakdown": { ... from conviction.evaluate() ... },
-                        "targets": {
-                            "entry": float | None,    # only for entered users
-                            "target": float,
-                            "stop": float,
-                        },
+                "aidy": {
+                    "breakdown": { ... from conviction.evaluate() ... },
+                    "targets": {
+                        "entry": float | None,    # only for entered users
+                        "target": float,
+                        "stop": float,
                     },
-                    "jesse": {...},
                 },
+                "jesse": {...},
             },
             60: {...},
         },
@@ -124,9 +125,17 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
     common_inputs = _build_common_inputs(snap)
     holders = (watchlist_entry or {}).get("holders") or {}
 
+    # Output schema is `horizons[h][user]` directly — NOT
+    # `horizons[h]["users"][user]`. This matches what the dashboard's
+    # _render_conviction and _render_action consume, as well as the
+    # _conviction_headline summary which iterates the first user via
+    # `next(iter(horizons[first_h].keys()))`. The "users" wrapper was a
+    # natural-feeling shape but breaks the headline iteration; staying
+    # consistent with the dashboard's read pattern keeps everything
+    # wired with no shims.
     horizons_out: dict = {}
     for h in config.HORIZONS:
-        users_out: dict = {}
+        per_horizon: dict = {}
         for user, holder in holders.items():
             user_state = (holder or {}).get("state", "watching")
             user_mc_horizon = ((mc_block.get("users") or {}).get(user) or {}).get("horizons", {}).get(h)
@@ -144,7 +153,7 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
 
             breakdown = conviction.evaluate(inputs, horizon_days=h)
 
-            users_out[user] = {
+            per_horizon[user] = {
                 "breakdown": breakdown,
                 "targets": {
                     "entry": holder.get("entry"),
@@ -152,7 +161,7 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
                     "stop": float(user_targets["stop_price"]),
                 },
             }
-        horizons_out[h] = {"users": users_out}
+        horizons_out[h] = per_horizon
 
     return {
         "status": "ok",
@@ -233,9 +242,8 @@ def _print_summary(ticker: str, payload: dict) -> None:
         return
     for h in config.HORIZONS:
         per_h = payload["horizons"].get(h) or {}
-        users = per_h.get("users") or {}
         print(f"\n  --- {h}d horizon ---")
-        for user, u in users.items():
+        for user, u in per_h.items():
             b = u["breakdown"]
             t = u["targets"]
             score = b["final_score"]
