@@ -27,8 +27,13 @@ import argparse
 import json
 import sys
 from datetime import date, timedelta
+from pathlib import Path
 
-from src.data_sources import fmp
+# Allow running as `python tools/probe_catalyst_data.py` from repo root
+# (without this, Python's sys.path starts at tools/ and can't see src/).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.data_sources import fmp  # noqa: E402
 
 
 def probe_earnings_calendar(ticker: str) -> None:
