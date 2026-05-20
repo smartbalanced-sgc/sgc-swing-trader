@@ -32,15 +32,19 @@ from src import config
 
 _STYLES = """
 :root {
-  --bg: #f5f4ef;
-  --bg-tint: #ede9dc;          /* warm parchment top-of-page tint */
-  --bg-accent: #f8f5ed;        /* very subtle for panels */
+  /* Warm parchment palette - inspired by FT pink-paper aesthetic but
+   * lighter and cleaner. No blue anywhere (dip engine claims blue).
+   * The accent colors are warm: copper, burgundy, soft moss. */
+  --bg-deep: #ede4cf;          /* darker parchment for outer gradient */
+  --bg: #faf6eb;               /* main page background */
+  --bg-tint: #f4ecd8;          /* slightly darker top tint */
   --panel: #ffffff;
-  --border: #e2dfd5;
-  --border-strong: #c8c3b3;
-  --text: #1a1a1a;
-  --text-soft: #525252;
-  --muted: #737373;
+  --panel-warm: #fdfbf5;       /* very subtle off-white for nested panels */
+  --border: #e2d9c3;
+  --border-strong: #c9bd9c;
+  --text: #1c1917;             /* warm near-black */
+  --text-soft: #44403c;        /* warm gray 700 */
+  --muted: #78716c;            /* warm gray 500 */
   --ok: #15803d;
   --ok-bg: #f0fdf4;
   --warn: #b45309;
@@ -49,24 +53,35 @@ _STYLES = """
   --fail-bg: #fef2f2;
   --pending: #6b7280;
   --pending-bg: #f9fafb;
-  --accent: #1e40af;            /* deeper blue — more elegant than royal */
-  --accent-soft: #e0e7ff;
-  --gold: #b87333;              /* subtle copper accent for highlights */
-  --header-grad-start: #1e293b; /* slate 800 */
-  --header-grad-end: #334155;   /* slate 700 */
+  /* Accent system - warm earth-tones to replace the deep-blue accent
+   * (the dip engine uses blue; we want a distinct identity here). */
+  --accent: #7c2d12;            /* deep burgundy / oxblood - primary */
+  --accent-soft: #fef3e2;       /* warm peach background */
+  --accent-soft-2: #fff7ed;
+  --gold: #b87333;              /* copper accent */
+  --gold-deep: #92400e;         /* darker copper for headings */
+  --moss: #4d7c0f;              /* soft moss for OK states (not green-bg) */
+  --header-bg-start: #1c1917;   /* warm walnut */
+  --header-bg-end: #292524;     /* slightly lighter walnut */
   --shadow: 0 1px 3px rgba(60, 50, 40, 0.06), 0 1px 2px rgba(60, 50, 40, 0.04);
-  --shadow-lg: 0 4px 14px rgba(60, 50, 40, 0.08);
+  --shadow-lg: 0 4px 14px rgba(80, 60, 30, 0.08);
+  --shadow-warm: 0 4px 20px rgba(184, 115, 51, 0.10);
 }
 * { box-sizing: border-box; }
 html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Layered background: subtle warm radial glows + parchment gradient.
+   * Gives the page a "report paper" feel without being noisy. */
   background:
-    linear-gradient(180deg, var(--bg-tint) 0%, var(--bg) 360px),
+    radial-gradient(ellipse 800px 600px at 15% 0%, rgba(184, 115, 51, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 700px 500px at 90% 30%, rgba(124, 45, 18, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 900px 700px at 50% 100%, rgba(146, 64, 14, 0.03) 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg-tint) 0%, var(--bg) 520px, var(--bg) 100%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
   margin: 0;
-  padding: 0;
+  padding-top: 18px;            /* breathing room above the header band */
   line-height: 1.5;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
@@ -74,26 +89,37 @@ html, body {
 .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px 80px; }
 .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
 
-/* ---------- top header band — elegant slate gradient ---------- */
+/* ---------- top header band — walnut with gold accent stripe ---------- */
 header.band {
-  background: linear-gradient(135deg, var(--header-grad-start) 0%, var(--header-grad-end) 100%);
-  color: #f1f5f9;
-  border-bottom: 3px solid var(--gold);
-  padding: 24px 0 22px;
-  margin-bottom: 26px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  background: linear-gradient(135deg, var(--header-bg-start) 0%, var(--header-bg-end) 100%);
+  color: #fef3e2;
+  border-radius: 12px;
+  margin: 0 20px 26px;
+  padding: 26px 0 22px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.18), inset 0 -3px 0 var(--gold);
 }
-header.band .wrap { padding: 0 28px; }
+header.band .wrap { padding: 0 28px; max-width: 1100px; }
 header.band h1 {
-  font-size: 22px; font-weight: 600; margin: 0 0 6px;
-  letter-spacing: -0.01em; color: #f8fafc;
+  font-size: 24px; font-weight: 600; margin: 0 0 6px;
+  letter-spacing: -0.015em; color: #fef9f1;
 }
-header.band .subtitle { color: #cbd5e1; font-size: 13px; }
+header.band h1::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 22px;
+  background: var(--gold);
+  margin-right: 12px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+header.band .subtitle { color: #d6c9a8; font-size: 13px; padding-left: 18px; }
 header.band .meta {
   display: flex; flex-wrap: wrap; gap: 8px 24px;
-  margin-top: 14px; font-size: 12px; color: #cbd5e1;
+  margin-top: 14px; font-size: 12px; color: #c9b896;
+  padding-left: 18px;
 }
-header.band .meta strong { color: #f1f5f9; font-weight: 600; }
+header.band .meta strong { color: #fef9f1; font-weight: 600; }
 
 /* ---------- section headings ---------- */
 h2.section {
@@ -405,12 +431,36 @@ details.subpanel > summary .expand-cue::before { content: "+ Expand"; }
 details.subpanel[open] > summary .expand-cue::before { content: "− Collapse"; }
 
 /* ---------- engine read panel (always visible) ---------- */
-.engine-read-panel { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px 14px; margin: 14px 0; }
-.engine-read-panel .erp-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #78350f; margin-bottom: 6px; }
+.engine-read-panel {
+  background: linear-gradient(135deg, #fef9ed 0%, #fef3e2 100%);
+  border: 1px solid #f6d99b;
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.engine-read-panel .erp-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold-deep); margin-bottom: 8px; }
 .engine-read-panel .erp-body { font-size: 13px; line-height: 1.6; color: var(--text); }
 .engine-read-panel .erp-body p { margin: 0 0 10px; }
 .engine-read-panel .erp-body p:last-child { margin-bottom: 0; }
-.engine-read-panel .erp-body strong { color: #78350f; }
+.engine-read-panel .erp-body strong { color: var(--gold-deep); }
+
+/* ---------- day-by-day price forecast panel (warm copper accent) ---------- */
+.daily-path-panel {
+  background: linear-gradient(135deg, #fdfbf5 0%, #ffffff 100%);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);   /* burgundy accent stripe */
+  border-radius: 8px;
+  padding: 14px 16px 12px;
+  margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.daily-path-panel .dpp-head { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.daily-path-panel .dpp-head .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+.daily-path-panel .dpp-head .sub { font-size: 11.5px; color: var(--muted); }
+.daily-path-panel .daily-path { margin: 0; }
+.daily-path-panel .dpp-footer { margin-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.5; font-style: italic; }
 
 /* daily-path table (collapsed by default) */
 .daily-path { font-size: 12.5px; width: 100%; border-collapse: collapse; }
@@ -847,25 +897,22 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
         _render_action(snap, watchlist_entry),
         # 3. Catalyst engine read (expanded — qualitative recommendation)
         _render_engine_read(snap),
-        # 4. Conviction trajectory (expanded — sparkline)
+        # 4. Day-by-day price forecast — moved here per Jesse's
+        # request. Sits right under Engine Read because that's where
+        # the "what could happen next" question lives. Has its own
+        # warm copper accent to stand out from the collapsibles below.
+        _render_daily_path_panel(snap),
+        # 5. Conviction trajectory (expanded — sparkline)
         _render_trajectory(snap),
 
         # Plain-English titles for collapsed extra-detail panels. The
         # idea: a user scanning the page sees "Why the engine says
         # this", "Earnings + news", "Market mood" etc. — not internal
-        # jargon. Mouse-over reveals the technical headline.
+        # jargon. The technical headline becomes the right-side meta.
         _collapsible(
             "What's the story today?",
             html.escape(thesis_summary) if thesis_summary else "click to read",
             _render_thesis(snap),
-        ),
-        # Day-by-day price forecast — moved up to sit right under
-        # Thesis per Jesse's request (most-asked "what could happen"
-        # question after reading the story).
-        _collapsible(
-            "Day-by-day price forecast",
-            "median scenario across 50,000 simulated paths",
-            _render_daily_path(snap),
         ),
         _collapsible(
             "Why the engine says this",
@@ -1838,6 +1885,47 @@ def _render_data(snap: dict) -> str:
     return "".join(rows)
 
 
+def _render_daily_path_panel(snap: dict) -> str:
+    """Always-visible day-by-day forecast panel. Sits below Engine Read
+    with a warm copper accent so it stands out from the collapsible
+    extra-detail panels below. Shows the first 20 days inline (the
+    "what could happen next month" answer); user can scroll horizontally
+    if they want to see the full 60-day path.
+    """
+    p = snap.get("daily_path")
+    if not p or p.get("status") == "pending":
+        return ""  # silent when MC isn't live; Engine Read covers the gap
+    rows = []
+    days = p.get("days") or []
+    for d in days[:20]:
+        zone = d.get("zone", "")
+        zone_cls = f"zone-{zone}" if zone in ("dip", "rally", "earnings") else ""
+        zone_label = {
+            "dip": "↓ dip zone",
+            "rally": "↑ rally zone",
+            "earnings": "⚡ earnings (empirical jump applied)",
+            "": "",
+        }.get(zone, "")
+        rows.append(
+            f"<tr><td class='num'>{d['day']}</td><td>{html.escape(d['date'])}</td>"
+            f"<td class='num'>${d['median_price']:.2f}</td>"
+            f"<td class='{zone_cls}'>{zone_label}</td></tr>"
+        )
+    return f"""
+<div class='daily-path-panel'>
+  <div class='dpp-head'>
+    <span class='label'>Day-by-day price forecast</span>
+    <span class='sub'>median scenario across {config.MC_PATHS:,} simulated paths — next 20 sessions</span>
+  </div>
+  <table class='daily-path'>
+    <thead><tr><th class='num'>Day</th><th>Date</th><th style='text-align:right;'>Median price</th><th>Zone</th></tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+  <div class='dpp-footer'>One typical scenario out of {config.MC_PATHS:,} simulated paths. Reality could be shallower, deeper, or different days. The dip/rally zones highlight the ±7-day window around the median's lowest and highest points.</div>
+</div>
+"""
+
+
 def _render_daily_path(snap: dict) -> str:
     p = snap.get("daily_path")
     if not p or p.get("status") == "pending":
@@ -2077,8 +2165,8 @@ def _sparkline_svg(values: list[float], width: int = 360, height: int = 56) -> s
 <svg width='{width}' height='{height}' viewBox='0 0 {width} {height}' xmlns='http://www.w3.org/2000/svg'>
   <rect x='0' y='0' width='{width}' height='{height}' fill='#fafafa' rx='3'/>
   {threshold_line}
-  <polyline points='{polyline}' fill='none' stroke='#1d4ed8' stroke-width='1.5'/>
-  <circle cx='{final_x:.1f}' cy='{final_y:.1f}' r='3' fill='#1d4ed8'/>
+  <polyline points='{polyline}' fill='none' stroke='#7c2d12' stroke-width='1.5'/>
+  <circle cx='{final_x:.1f}' cy='{final_y:.1f}' r='3' fill='#7c2d12'/>
   <text x='{pad_x + 4}' y='{height - 4}' font-size='10' fill='#737373'>{vmin:.2f}</text>
   <text x='{pad_x + 4}' y='{pad_y + 10}' font-size='10' fill='#737373'>{vmax:.2f}</text>
   <text x='{width - pad_x - 4}' y='{pad_y + 10}' font-size='10' fill='#10b981' text-anchor='end' opacity='0.7'>ENTER {enter_threshold:.2f}</text>
