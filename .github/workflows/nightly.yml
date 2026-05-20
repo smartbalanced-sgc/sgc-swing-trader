@@ -1,0 +1,113 @@
+name: SGC Swing Trader nightly
+
+# Runs the engine in PRODUCTION mode on a schedule and commits the
+# resulting snapshots + dashboard back to main. Test-mode runs happen
+# locally on the user's Mac and never trigger this workflow.
+#
+# Why not weekends: US markets are closed Sat/Sun; price math reads
+# Friday's close until Monday's close lands ~21:00 UK on Mon (engine
+# picks it up Tuesday morning). News flow does update over weekends
+# but the Monday 7:30 run captures it.
+#
+# Why 6:30 UTC: that's 7:30 UK during BST (end-Mar to end-Oct, ~60%
+# of the year) and 6:30 UK during GMT (winter — one hour earlier than
+# the requested 7:30). GitHub Actions cron is UTC-only and DST-naive,
+# so picking 6:30 UTC keeps it ≤ 7:30 UK year-round (slightly early
+# in winter is harmless; price data from prior US close is stable).
+
+on:
+  schedule:
+    # 6:30 UTC Mon-Fri = 7:30 UK BST / 6:30 UK GMT
+    - cron: '30 6 * * 1-5'
+  workflow_dispatch:
+    # Manual trigger from Actions tab or `gh workflow run nightly.yml`.
+    # No inputs — production mode is the only mode this workflow runs.
+
+# Permissions for the workflow to push generated snapshots + dashboard
+# back to main. Read-only by default, write for commits/contents only.
+permissions:
+  contents: write
+
+# Avoid concurrent runs stomping each other (e.g. manual dispatch
+# while cron fires). Cancel the in-progress one — the later trigger
+# wins; first-run state still committed.
+concurrency:
+  group: nightly-production
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # full universe of 21 tickers should fit; if it doesn't, surface fast
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # Need full history so the engine's multi-night trajectory
+          # smoothing (conviction sparkline, tier-mismatch consecutive
+          # nights) reads correctly. Shallow checkout would amputate it.
+          fetch-depth: 0
+          # Use the workflow's default GITHUB_TOKEN — has contents:write
+          # via the permissions block above; lets us push back.
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run engine — production mode
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          SGC_RUN_MODE: production
+          # Python's default of buffering stdout makes the live log
+          # useless for diagnosing where a slow run is stuck.
+          PYTHONUNBUFFERED: '1'
+        run: python -m src.main
+
+      - name: Commit snapshots + dashboard
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage only the directories the engine writes to. Avoids
+          # accidentally committing cache files or pip-installed deps
+          # if something in the runner's environment changed them.
+          git add data/snapshots/ docs/
+          # No-op if nothing changed (e.g. FMP rate-limit returned cached
+          # values identical to yesterday's, every ticker had a hard
+          # error and produced no new snapshot). Don't fail the workflow
+          # on no-op.
+          if git diff --cached --quiet; then
+            echo "No changes to commit (engine produced no new files)."
+            exit 0
+          fi
+          git commit -m "Nightly production run: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # Retry-aware push: pull --rebase first in case the watchlist
+          # was mutated by a parallel claude.ai/code session while the
+          # engine was running. Rebase keeps the linear history clean.
+          for attempt in 1 2 3 4; do
+            git pull --rebase origin main && git push origin main && break
+            echo "Push attempt $attempt failed; retrying after $((attempt * attempt))s..."
+            sleep $((attempt * attempt))
+          done
+
+      - name: Summarize run in workflow output
+        if: always()
+        run: |
+          if [ -f docs/index.html ]; then
+            echo "## Nightly run summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Run date: $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+            echo "- Dashboard: \`docs/index.html\` ($(wc -c < docs/index.html) bytes)" >> $GITHUB_STEP_SUMMARY
+            echo "- Snapshots written: $(find data/snapshots -name '*.json' -newer requirements.txt 2>/dev/null | wc -l)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Nightly run FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Engine did not produce \`docs/index.html\`. Inspect the run logs above." >> $GITHUB_STEP_SUMMARY
+          fi
