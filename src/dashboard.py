@@ -324,6 +324,23 @@ section.ticker-card > .card-body { padding: 4px 22px 22px; }
 .user-card .copy-paste { background: #1f2937; color: #f3f4f6; padding: 6px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; margin-top: 8px; }
 .user-card .copy-paste::before { content: "$ "; color: #9ca3af; }
 
+/* ---------- mixed-state divergence panel ----------
+ * Used when Aidy and Jesse are in different states on the same
+ * ticker+horizon (one entered, one watching) — Layer 1 + Layer 2 are
+ * shown once because they don't depend on user_state, then Layer 3 +
+ * action are split per state-group below the divergence note. */
+.conviction-block > .horizon-head.divergence-head { background: linear-gradient(135deg, rgba(184, 115, 51, 0.06) 0%, transparent 100%); padding: 8px 10px; border-radius: 4px; }
+.divergence-note { font-size: 12px; color: var(--text-soft); margin: 4px 0 12px; padding: 8px 12px; background: #fdfbf5; border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; line-height: 1.55; }
+.divergence-note em { font-style: italic; color: var(--text); }
+.divergence-section { margin-top: 14px; }
+.divergence-section .divergence-section-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin: 0 0 10px; }
+.divergence-block { background: #fafafa; border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }
+.divergence-block:last-child { margin-bottom: 0; }
+.divergence-block .divergence-block-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dotted var(--border); }
+.divergence-block .divergence-block-head .divergence-block-who { font-weight: 600; font-size: 13px; }
+.divergence-block .divergence-block-head .divergence-block-state { color: var(--muted); font-weight: 500; font-size: 12px; }
+.divergence-block .divergence-block-head .score { font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--text-soft); }
+
 /* catalyst narrative */
 .catalyst-line { display: flex; gap: 12px; align-items: baseline; margin: 6px 0; font-size: 13px; }
 .catalyst-line .icon { font-family: ui-monospace, monospace; color: var(--accent); font-weight: 600; font-size: 11px; }
@@ -1438,42 +1455,209 @@ def _render_conviction(snap: dict, watchlist_entry: dict) -> str:
 
 
 def _render_one_horizon(horizon_days: int, per_horizon: dict, holders: dict) -> str:
-    # per_horizon is keyed directly by user: {"aidy": {...}, "jesse": {...}}.
-    # We display the breakdown once per user since user_state can affect
-    # which vetoes fire.
-    user_columns = []
+    """Render the per-horizon conviction breakdown, grouping users
+    whose verdict + state agree.
+
+    Why this exists: when both Aidy and Jesse are in the same state
+    (both watching, or both entered) the engine's math produces a
+    byte-identical breakdown for each — rendering it twice is pure
+    visual noise. The split only carries information when the users
+    diverge, which happens when one has entered and the other has not
+    (different vetoes apply, different verdict labels possible).
+
+    Grouping rule: bucket users by (verdict_label, user_state).
+      - 1 group  → one consolidated panel ("Aidy & Jesse — WAIT").
+      - 2 groups → shared math on top (Layer 1 edge + Layer 2
+                   confidence are user-state-independent, see
+                   conviction._layer1_edge / _layer2_confidence),
+                   then a divergence section with one sub-block per
+                   group showing Layer 3 + action.
+    """
+    groups: list[dict] = []
+    sig_index: dict[tuple, int] = {}
     for user in config.USERS:
         if user not in per_horizon:
             continue
         u = per_horizon[user]
+        state = holders.get(user, {}).get("state", "watching")
         breakdown = u["breakdown"]
         targets = u.get("targets", {})
-        verdict_label = breakdown["verdict_label"]
-        score = breakdown["final_score"]
-        reason = breakdown["verdict_reason"]
-        state = holders.get(user, {}).get("state", "watching")
+        sig = (breakdown["verdict_label"], state)
+        if sig in sig_index:
+            g = groups[sig_index[sig]]
+            g["users"].append(user)
+            g["entries"][user] = holders.get(user, {}).get("entry")
+        else:
+            sig_index[sig] = len(groups)
+            groups.append({
+                "users": [user],
+                "state": state,
+                "verdict": breakdown["verdict_label"],
+                "breakdown": breakdown,
+                "targets": targets,
+                "entries": {user: holders.get(user, {}).get("entry")},
+            })
 
-        # Layer-by-layer rendering
-        layer1 = _render_layer1(breakdown["layer1_edge"])
-        layer2 = _render_layer2(breakdown["layer2_confidence"])
-        layer3 = _render_layer3(breakdown["layer3_vetoes"])
+    if not groups:
+        return ""
 
-        # User verdict block
-        user_columns.append(f"""
+    if len(groups) == 1:
+        return _render_consolidated_horizon_panel(horizon_days, groups[0])
+    return _render_split_horizon_panel(horizon_days, groups)
+
+
+def _format_user_names(users: list[str]) -> str:
+    """Plain-English join: 'Aidy', 'Aidy & Jesse', 'Aidy, Jesse, & Kim'."""
+    names = [u.title() for u in users]
+    if len(names) == 0:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} & {names[1]}"
+    return ", ".join(names[:-1]) + f", & {names[-1]}"
+
+
+def _render_consolidated_horizon_panel(horizon_days: int, group: dict) -> str:
+    breakdown = group["breakdown"]
+    verdict = breakdown["verdict_label"]
+    score = breakdown["final_score"]
+    reason = breakdown["verdict_reason"]
+    state = group["state"]
+    users_label = _format_user_names(group["users"])
+
+    layer1 = _render_layer1(breakdown["layer1_edge"])
+    layer2 = _render_layer2(breakdown["layer2_confidence"])
+    layer3 = _render_layer3(breakdown["layer3_vetoes"])
+    action = _render_group_action(group)
+
+    return f"""
 <div class='conviction-block' style='margin: 12px 0;'>
   <div class='horizon-head'>
-    <span class='horizon-label'>{horizon_days}d horizon — {user.title()} ({html.escape(state)})</span>
-    <span class='verdict verdict-{html.escape(verdict_label)}'>{html.escape(verdict_label)}</span>
+    <span class='horizon-label'>{horizon_days}d horizon — {html.escape(users_label)} ({html.escape(state)})</span>
+    <span class='verdict verdict-{html.escape(verdict)}'>{html.escape(verdict)}</span>
     <span class='score'>final score {score:.2f}</span>
     <span class='meta' style='color: var(--muted); font-size: 12px;'>{html.escape(reason)}</span>
   </div>
   {layer1}
   {layer2}
   {layer3}
-  {_render_user_targets(user, state, targets, verdict_label)}
+  {action}
+</div>
+"""
+
+
+def _render_split_horizon_panel(horizon_days: int, groups: list[dict]) -> str:
+    """Mixed-state panel: shared Layer 1 + Layer 2 once at top, then a
+    divergence section with one sub-block per (verdict, state) group."""
+    # Layer 1 + 2 are user-state-independent — taking from groups[0] is
+    # safe; the values would be identical in groups[1].
+    base = groups[0]["breakdown"]
+    layer1 = _render_layer1(base["layer1_edge"])
+    layer2 = _render_layer2(base["layer2_confidence"])
+
+    # Summary line in the header: "Aidy (entered) → HOLD · Jesse (watching) → WAIT"
+    head_chunks = []
+    for g in groups:
+        names = _format_user_names(g["users"])
+        head_chunks.append(
+            f"{html.escape(names)} ({html.escape(g['state'])}) → "
+            f"<span class='verdict verdict-{html.escape(g['verdict'])}'>"
+            f"{html.escape(g['verdict'])}</span>"
+        )
+    head_summary = " · ".join(head_chunks)
+
+    # Per-group sub-block: Layer 3 + action only (Layer 1+2 already shown).
+    sub_blocks = []
+    for g in groups:
+        names = _format_user_names(g["users"])
+        layer3 = _render_layer3(g["breakdown"]["layer3_vetoes"])
+        action = _render_group_action(g)
+        sub_blocks.append(f"""
+<div class='divergence-block'>
+  <div class='divergence-block-head'>
+    <span class='divergence-block-who'>{html.escape(names)} <span class='divergence-block-state'>({html.escape(g['state'])})</span></span>
+    <span class='verdict verdict-{html.escape(g['verdict'])}'>{html.escape(g['verdict'])}</span>
+    <span class='score'>final score {g['breakdown']['final_score']:.2f}</span>
+    <span class='meta' style='color: var(--muted); font-size: 12px;'>{html.escape(g['breakdown']['verdict_reason'])}</span>
+  </div>
+  {layer3}
+  {action}
 </div>
 """)
-    return "".join(user_columns)
+
+    return f"""
+<div class='conviction-block' style='margin: 12px 0;'>
+  <div class='horizon-head divergence-head'>
+    <span class='horizon-label'>{horizon_days}d horizon — divergent verdict</span>
+    <span class='meta' style='color: var(--muted); font-size: 12px;'>{head_summary}</span>
+  </div>
+  <div class='divergence-note'>
+    Aidy and Jesse are in different states on this ticker, so the verdicts diverge.
+    The math below the divergence note (edge + confidence) is identical for both —
+    Layers 1 and 2 don't depend on whether you've entered. Layer 3 vetoes and the
+    suggested action <em>do</em> depend on state, and are shown per-user below.
+  </div>
+  {layer1}
+  {layer2}
+  <div class='divergence-section'>
+    <div class='divergence-section-head'>Per-user divergence — Layer 3 vetoes &amp; action</div>
+    {"".join(sub_blocks)}
+  </div>
+</div>
+"""
+
+
+def _render_group_action(group: dict) -> str:
+    """Render the action block for a (verdict, state) user-group.
+
+    For state=entered: lists each user's fill price (they may differ),
+    then shared target/stop. For state=watching: shows the engine's
+    suggested entry/target/stop — identical across users so no per-user
+    split needed."""
+    state = group["state"]
+    users = group["users"]
+    targets = group["targets"] or {}
+    if not targets:
+        return ""
+    entry = targets.get("entry") or targets.get("current_position_entry")
+    target = targets.get("target")
+    stop = targets.get("stop")
+    copy_paste = targets.get("copy_paste") or ""
+
+    lines = []
+    if state == "entered":
+        entry_chunks = []
+        for user in users:
+            ent = group["entries"].get(user)
+            if ent:
+                entry_chunks.append(f"{user.title()} @ ${ent:.2f}")
+        if entry_chunks:
+            lbl = "Current positions" if len(entry_chunks) > 1 else "Current position"
+            lines.append(f"<div><span class='lbl'>{lbl}:</span> {' · '.join(entry_chunks)}</div>")
+        if target:
+            lines.append(f"<div><span class='lbl'>Target:</span> ${target:.2f}</div>")
+        if stop:
+            lines.append(f"<div><span class='lbl'>Stop:</span> ${stop:.2f}</div>")
+    else:
+        if entry:
+            lines.append(f"<div><span class='lbl'>Suggested entry:</span> ${entry}</div>")
+        if target:
+            lines.append(f"<div><span class='lbl'>Suggested target:</span> ${target:.2f}</div>")
+        if stop:
+            lines.append(f"<div><span class='lbl'>Suggested stop:</span> ${stop:.2f}</div>")
+
+    if not lines:
+        return ""
+
+    names = _format_user_names(users)
+    return f"""
+<div class='user-card' style='margin-top: 12px;'>
+  <div class='user-head'><span class='name'>{html.escape(names)} action</span><span class='state'>{html.escape(state)}</span></div>
+  <div class='targets'>{"".join(lines)}</div>
+  {f"<div class='copy-paste'>{html.escape(copy_paste)}</div>" if copy_paste else ""}
+</div>
+"""
 
 
 def _render_layer1(layer1: dict) -> str:
@@ -1560,37 +1744,6 @@ def _render_layer3(layer3: dict) -> str:
 <div class='layer'>
   <div class='layer-head'>Layer 3 — Vetoes (any reason to back off?) <span class='layer-result'>{summary}</span></div>
   {"".join(rows)}
-</div>
-"""
-
-
-def _render_user_targets(user: str, state: str, targets: dict, verdict_label: str) -> str:
-    if not targets:
-        return ""
-    entry = targets.get("entry") or targets.get("current_position_entry")
-    target = targets.get("target")
-    stop = targets.get("stop")
-    copy_paste = targets.get("copy_paste") or ""
-
-    lines = []
-    if state == "entered" and entry:
-        lines.append(f"<div><span class='lbl'>Current position:</span> entered @ ${entry:.2f}</div>")
-        if target:
-            lines.append(f"<div><span class='lbl'>Target:</span> ${target:.2f}</div>")
-        if stop:
-            lines.append(f"<div><span class='lbl'>Stop:</span> ${stop:.2f}</div>")
-    else:
-        if entry:
-            lines.append(f"<div><span class='lbl'>Suggested entry:</span> ${entry}</div>")
-        if target:
-            lines.append(f"<div><span class='lbl'>Suggested target:</span> ${target:.2f}</div>")
-        if stop:
-            lines.append(f"<div><span class='lbl'>Suggested stop:</span> ${stop:.2f}</div>")
-    return f"""
-<div class='user-card' style='margin-top: 12px;'>
-  <div class='user-head'><span class='name'>{user.title()} action</span><span class='state'>{html.escape(state)}</span></div>
-  <div class='targets'>{"".join(lines)}</div>
-  {f"<div class='copy-paste'>{html.escape(copy_paste)}</div>" if copy_paste else ""}
 </div>
 """
 
