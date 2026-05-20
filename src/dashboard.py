@@ -753,27 +753,41 @@ def render(payload: dict) -> str:
 <div class="wrap">
 {body}
 </div>
-<!-- Floating scroll-to-top button. Hidden until user scrolls past
-     400px (about one screen on most laptops), then fades in at lower
-     right. Click smooth-scrolls back to top. Plain JS, no library. -->
+<!-- Floating scroll-to-top button. Visible ONLY while the user is
+     actively scrolling (past the 400px threshold). Hides 1.5s after
+     scrolling stops, so a static page is never cluttered. Click
+     smooth-scrolls back to top — during that smooth scroll the
+     button stays visible because the programmatic scroll fires scroll
+     events; once scrollY drops below threshold the hide branch wins. -->
 <button id="scroll-to-top" aria-label="Scroll to top" type="button">↑</button>
 <script>
   (function () {{
     var btn = document.getElementById('scroll-to-top');
     if (!btn) return;
-    var threshold = 400; // pixels from top before button appears
-    function toggle() {{
-      if (window.scrollY > threshold) {{
-        btn.classList.add('visible');
-      }} else {{
-        btn.classList.remove('visible');
+    var threshold = 400;   // pixels from top before button can appear
+    var hideDelay = 1500;  // ms of no scroll activity before fade-out
+    var hideTimer = null;
+
+    function show() {{ btn.classList.add('visible'); }}
+    function hide() {{ btn.classList.remove('visible'); }}
+
+    function onScroll() {{
+      if (window.scrollY <= threshold) {{
+        // Near the top — always hide and cancel any pending hide.
+        hide();
+        if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
+        return;
       }}
+      // Scrolling past threshold — show and reset the auto-hide timer.
+      show();
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(hide, hideDelay);
     }}
-    window.addEventListener('scroll', toggle, {{ passive: true }});
+
+    window.addEventListener('scroll', onScroll, {{ passive: true }});
     btn.addEventListener('click', function () {{
       window.scrollTo({{ top: 0, behavior: 'smooth' }});
     }});
-    toggle(); // run once on load in case page is reloaded mid-scroll
   }})();
 </script>
 </body>
