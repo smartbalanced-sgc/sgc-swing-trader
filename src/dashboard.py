@@ -593,6 +593,49 @@ details.daily-path-panel .dpp-footer { margin-top: 10px; font-size: 11.5px; colo
 footer.band { margin-top: 56px; padding: 18px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 footer.band p { margin: 4px 0; }
 
+/* ---------- floating scroll-to-top button ----------
+   Fixed lower-right. Hidden by default; the JS adds .visible once
+   the user scrolls past ~400px. Designed to fade in/out so it
+   doesn't startle on a fast scroll. Warm gold to match the header
+   accent rather than a generic blue. */
+#scroll-to-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--accent-warm, #b87333) 0%, #7c2d12 100%);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(80, 60, 30, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+  z-index: 50;
+}
+#scroll-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+#scroll-to-top:hover {
+  box-shadow: 0 6px 20px rgba(80, 60, 30, 0.35);
+  filter: brightness(1.08);
+}
+#scroll-to-top:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 720px) {
+  #scroll-to-top { right: 16px; bottom: 16px; width: 40px; height: 40px; font-size: 20px; }
+}
+
 /* responsive */
 @media (max-width: 720px) {
   .kv-row { grid-template-columns: 1fr; gap: 2px; }
@@ -682,7 +725,14 @@ def render(payload: dict) -> str:
     parts.append(_render_verdict_glossary())
 
     parts.append("<h2 class='section'>Per-ticker deep reports</h2>")
-    for ticker in payload.get("watchlist", {}).keys():
+    # Sort by 30d rally-zone upside (biggest gain potential first), so
+    # the highest-conviction-upside names lead. Tickers with no rally
+    # price (data fetch failed, MC pending) sink to the bottom.
+    sorted_tickers = sorted(
+        payload.get("watchlist", {}).keys(),
+        key=lambda t: -_rally_pct_30d(payload.get("tickers", {}).get(t) or {}),
+    )
+    for ticker in sorted_tickers:
         snap = payload.get("tickers", {}).get(ticker)
         if snap is None:
             continue
@@ -703,6 +753,29 @@ def render(payload: dict) -> str:
 <div class="wrap">
 {body}
 </div>
+<!-- Floating scroll-to-top button. Hidden until user scrolls past
+     400px (about one screen on most laptops), then fades in at lower
+     right. Click smooth-scrolls back to top. Plain JS, no library. -->
+<button id="scroll-to-top" aria-label="Scroll to top" type="button">↑</button>
+<script>
+  (function () {{
+    var btn = document.getElementById('scroll-to-top');
+    if (!btn) return;
+    var threshold = 400; // pixels from top before button appears
+    function toggle() {{
+      if (window.scrollY > threshold) {{
+        btn.classList.add('visible');
+      }} else {{
+        btn.classList.remove('visible');
+      }}
+    }}
+    window.addEventListener('scroll', toggle, {{ passive: true }});
+    btn.addEventListener('click', function () {{
+      window.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }});
+    toggle(); // run once on load in case page is reloaded mid-scroll
+  }})();
+</script>
 </body>
 </html>
 """
@@ -888,7 +961,16 @@ def _render_deployment(payload: dict) -> str:
             if not entries:
                 continue
             ticker_chunks = []
-            for ticker, users in entries.items():
+            # Within each verdict-horizon group, order tickers by 30d
+            # rally upside (biggest gain potential first) so the most
+            # actionable names lead the row. Mirrors the per-ticker-card
+            # sort below.
+            sorted_entry_tickers = sorted(
+                entries.keys(),
+                key=lambda t: -_rally_pct_30d(tickers.get(t) or {}),
+            )
+            for ticker in sorted_entry_tickers:
+                users = entries[ticker]
                 holders = (watchlist.get(ticker) or {}).get("holders") or {}
                 all_tracking = [u for u in config.USERS if u in holders]
                 # If every tracking user has this same (label, horizon),
@@ -950,6 +1032,24 @@ def _ticker_link(ticker: str) -> str:
         f"<a class='t212-link mono' href='{html.escape(url)}' "
         f"target='_blank' rel='noopener noreferrer'>{html.escape(ticker)}</a>"
     )
+
+
+def _rally_pct_30d(snap: dict) -> float:
+    """% upside from current price to the 30d Monte-Carlo rally-sell
+    zone. Used to sort tickers by biggest gain potential. Returns a
+    very negative number when data is missing so those tickers sort
+    to the end (largest-gain-first order)."""
+    pl = snap.get("price_levels") or {}
+    current = pl.get("current_price") or 0.0
+    if not current:
+        return -1e9
+    horizons = pl.get("horizons") or {}
+    # JSON round-trips integer keys to strings; accept both.
+    h30 = horizons.get(30) or horizons.get("30") or {}
+    rally_price = (h30.get("rally") or {}).get("price")
+    if not rally_price:
+        return -1e9
+    return (rally_price - current) / current * 100.0
 
 
 # ---------- consolidated per-stock verdict grouping ----------
