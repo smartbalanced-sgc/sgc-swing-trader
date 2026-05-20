@@ -219,9 +219,9 @@ def _build_thesis(snap: dict, horizons_out: dict) -> dict:
                 f"({ne['date']}) — Layer-3 catalyst veto active."
             )
         elif dist <= 5:
-            parts.append(f"{ne['type'].title()} in {dist} sessions — proximity haircut applies to confidence.")
+            parts.append(f"{ne['type'].title()} in {dist} sessions — Layer-3 in-horizon veto active on both horizons.")
         elif dist <= 30:
-            parts.append(f"{ne['type'].title()} in {dist} sessions, inside the 30d horizon.")
+            parts.append(f"{ne['type'].title()} in {dist} sessions, inside the 30d horizon — Layer-3 veto active on 30d.")
         elif dist <= 60:
             parts.append(f"{ne['type'].title()} in {dist} sessions, outside 30d but inside 60d.")
         else:

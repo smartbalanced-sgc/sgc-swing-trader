@@ -68,6 +68,10 @@ _STYLES = """
   --shadow-warm: 0 4px 20px rgba(184, 115, 51, 0.10);
 }
 * { box-sizing: border-box; }
+/* Smooth in-page navigation: ticker chips in the deployment summary
+   jump to their per-ticker section below. scroll-padding-top keeps the
+   ticker card header clear of the page's top edge after the jump. */
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* Layered background: subtle warm radial glows + parchment gradient.
@@ -199,6 +203,17 @@ details.info-block > .body { padding: 0 16px 16px; font-size: 13px; color: var(-
 .deployment .label { font-weight: 600; min-width: 130px; }
 .deployment .ticker-list { color: var(--text-soft); font-family: ui-monospace, monospace; font-size: 12.5px; }
 .deployment .count { color: var(--muted); font-weight: 500; }
+/* Ticker chip-anchors: each ticker symbol in the deployment row is a
+   smooth-scroll link to that ticker's section below. Underline on hover
+   so it's obvious they're interactive without making them shout. */
+.deployment a.ticker-jump {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+  transition: color 100ms ease, border-color 100ms ease;
+}
+.deployment a.ticker-jump:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.deployment a.ticker-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
 /* ---------- ticker card ---------- */
 section.ticker-card {
@@ -510,20 +525,43 @@ details.subpanel[open] > summary .expand-cue::before { content: "− Collapse"; 
 .engine-read-panel .erp-body strong { color: var(--gold-deep); }
 
 /* ---------- day-by-day price forecast panel (warm copper accent) ---------- */
-.daily-path-panel {
+/* Collapsed by default — Jesse's preference: the panel adds depth on demand
+   but shouldn't dominate the per-ticker card on first glance. Click the
+   summary row to expand. */
+details.daily-path-panel {
   background: linear-gradient(135deg, #fdfbf5 0%, #ffffff 100%);
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);   /* burgundy accent stripe */
   border-radius: 8px;
-  padding: 14px 16px 12px;
+  padding: 10px 16px;
   margin: 14px 0;
   box-shadow: var(--shadow);
 }
-.daily-path-panel .dpp-head { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
-.daily-path-panel .dpp-head .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
-.daily-path-panel .dpp-head .sub { font-size: 11.5px; color: var(--muted); }
-.daily-path-panel .daily-path { margin: 0; }
-.daily-path-panel .dpp-footer { margin-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.5; font-style: italic; }
+details.daily-path-panel[open] { padding: 14px 16px 12px; }
+details.daily-path-panel > summary.dpp-head {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+  /* Caret rendered manually below so we can style it; hide native marker. */
+}
+details.daily-path-panel > summary.dpp-head::-webkit-details-marker { display: none; }
+details.daily-path-panel > summary.dpp-head::before {
+  content: '▸';
+  font-size: 11px;
+  color: var(--accent);
+  margin-right: 4px;
+  transition: transform 120ms ease;
+  display: inline-block;
+}
+details.daily-path-panel[open] > summary.dpp-head::before { transform: rotate(90deg); }
+details.daily-path-panel > summary.dpp-head .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+details.daily-path-panel > summary.dpp-head .sub { font-size: 11.5px; color: var(--muted); }
+details.daily-path-panel .dpp-body { margin-top: 10px; }
+details.daily-path-panel .daily-path { margin: 0; }
+details.daily-path-panel .dpp-footer { margin-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.5; font-style: italic; }
 
 /* daily-path table (collapsed by default) */
 .daily-path { font-size: 12.5px; width: 100%; border-collapse: collapse; }
@@ -820,7 +858,10 @@ def _render_deployment(payload: dict) -> str:
                     user_qual = ""
                 else:
                     user_qual = f" ({', '.join(u.title() for u in users)})"
-                ticker_chunks.append(f"<span class='mono'>{html.escape(ticker)}</span>{user_qual}")
+                ticker_chunks.append(
+                    f"<a class='ticker-jump mono' href='#ticker-{html.escape(ticker)}'>"
+                    f"{html.escape(ticker)}</a>{user_qual}"
+                )
 
             rows.append(
                 f"<div class='row'>"
@@ -2035,17 +2076,19 @@ def _render_daily_path_panel(snap: dict) -> str:
             f"<td class='{zone_cls}'>{zone_label}</td></tr>"
         )
     return f"""
-<div class='daily-path-panel'>
-  <div class='dpp-head'>
+<details class='daily-path-panel'>
+  <summary class='dpp-head'>
     <span class='label'>Day-by-day price forecast</span>
-    <span class='sub'>median scenario across {config.MC_PATHS:,} simulated paths — next 20 sessions</span>
+    <span class='sub'>median scenario across {config.MC_PATHS:,} simulated paths — next 20 sessions (click to expand)</span>
+  </summary>
+  <div class='dpp-body'>
+    <table class='daily-path'>
+      <thead><tr><th class='num'>Day</th><th>Date</th><th style='text-align:right;'>Median price</th><th>Zone</th></tr></thead>
+      <tbody>{"".join(rows)}</tbody>
+    </table>
+    <div class='dpp-footer'>One typical scenario out of {config.MC_PATHS:,} simulated paths. Reality could be shallower, deeper, or different days. The dip/rally zones highlight the ±7-day window around the median's lowest and highest points.</div>
   </div>
-  <table class='daily-path'>
-    <thead><tr><th class='num'>Day</th><th>Date</th><th style='text-align:right;'>Median price</th><th>Zone</th></tr></thead>
-    <tbody>{"".join(rows)}</tbody>
-  </table>
-  <div class='dpp-footer'>One typical scenario out of {config.MC_PATHS:,} simulated paths. Reality could be shallower, deeper, or different days. The dip/rally zones highlight the ±7-day window around the median's lowest and highest points.</div>
-</div>
+</details>
 """
 
 

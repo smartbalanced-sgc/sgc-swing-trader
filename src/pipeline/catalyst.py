@@ -735,7 +735,7 @@ def _build_engine_recommendation(payload: dict, tier: str | None) -> str:
     """Build a plain-English summary paragraph for the engine-read panel.
 
     Synthesizes: next event distance, recent news direction, analyst
-    activity, short-interest level + trend, and the proximity-haircut
+    activity, short-interest level + trend, and the in-horizon veto
     implication for ENTER decisions.
     """
     parts: list[str] = []
@@ -746,24 +746,24 @@ def _build_engine_recommendation(payload: dict, tier: str | None) -> str:
         if dist <= 1:
             parts.append(
                 f"**{ne['type'].title()} is {('today' if dist == 0 else 'tomorrow')}** "
-                f"({ne['date']}) — Layer-3 catalyst veto is firing (proximity haircut "
-                f"{payload['proximity_haircut']*100:.0f}% to confidence). Treat any "
-                f"ENTER signal as a coin flip on event direction; the math doesn't "
-                f"price scheduled-event variance well at this distance."
+                f"({ne['date']}) — Layer-3 in-horizon catalyst veto fires for watching users "
+                f"on every horizon that contains this event (ENTER → WAIT until post-print). "
+                f"Treat any pre-print signal as a coin flip on event direction; the math "
+                f"doesn't price scheduled-event variance well at this distance."
             )
         elif dist <= 5:
             parts.append(
-                f"**{ne['type'].title()} in {dist} sessions** ({ne['date']}) — "
-                f"proximity haircut {payload['proximity_haircut']*100:.0f}% applied to "
-                f"confidence (Layer 2). ENTER is allowed but the engine's conviction "
-                f"score will read lower than it would in a no-event window."
+                f"**{ne['type'].title()} in {dist} sessions** ({ne['date']}) — Layer-3 "
+                f"in-horizon catalyst veto fires for watching users on every horizon that "
+                f"contains this event (ENTER → WAIT until post-print). The empirical "
+                f"earnings-jump overlay is already priced into the Monte-Carlo paths."
             )
         elif payload["in_horizon_30d"]:
             parts.append(
                 f"{ne['type'].title()} in {dist} sessions ({ne['date']}) — inside the "
-                f"30-day horizon but outside the proximity-haircut window. The 30-day "
-                f"verdict will factor in event variance; the 60-day verdict treats "
-                f"this event as a mid-horizon risk."
+                f"30-day horizon, so the 30-day Layer-3 catalyst veto fires for watching "
+                f"users (ENTER → WAIT until post-print). The 60-day verdict treats this "
+                f"event as a mid-horizon risk and remains actionable."
             )
         elif payload["in_horizon_60d"]:
             parts.append(
