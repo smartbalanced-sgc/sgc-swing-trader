@@ -646,6 +646,7 @@ T212_EXCHANGE_OVERRIDES = {
     "ASML":   "ASML.NL",   # Amsterdam-listed (we model USD ADR; T212 routes EU)
     "LDO.MI": "LDO.IT",    # Milan
     "IGLN.L": "IGLN.GB",   # London — iShares Physical Gold ETC
+    "MOG-A":  "MOG.A.US",  # Moog Class A — FMP uses hyphen, T212 uses dot
 }
 
 

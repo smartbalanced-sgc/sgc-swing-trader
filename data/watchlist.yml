@@ -7,7 +7,7 @@
 #
 # Schema (see docs/V1_SPEC.md §3 for full spec):
 #   TICKER:
-#     tier: A | B | C        # A mega-cap, B mid-cap growth, C small-cap catalyst
+#     tier: A | B | C        # A mega-cap mature, B mid-to-large growth, C small-cap fat-tailed
 #     notes: "free text"     # shared commentary
 #     holders:
 #       aidy:                # holder absent → user not tracking this ticker
@@ -15,29 +15,165 @@
 #         # entry/target/stop/entered_date only present when state == entered
 #       jesse:
 #         state: watching
+#
+# Tier criteria (investor-grade, set 2026-05-20 for production v1):
+#   A — Mega-cap (>$100B), mature, deep liquidity, defensive characteristics
+#   B — $10-100B, established business, moderate vol, decade+ history
+#   C — <$10B OR pre-revenue OR pure-narrative OR post-SPAC w/ <5y history
+#
+# Universe seeded 2026-05-20 with 21 tickers spanning A/B/C balance:
+#   2 A · 9 B · 10 C — bias toward C reflects deliberate exposure to
+#   narrative-driven asymmetric setups.
 
-NVDA:
+# ===================== TIER A — mega-cap mature =====================
+
+LIN:
   tier: A
-  notes: "AI infra leader — mega-cap mature, deep liquidity, A-tier representative"
+  notes: "Industrial gases monopoly — Linde, ~$200B+ mature defensive, deep liquidity, dividend aristocrat profile, A-tier representative"
   holders:
     aidy: {state: watching}
     jesse: {state: watching}
 
-AMAT:
-  tier: B
-  notes: "Semi-cap-equipment, AI-capex beneficiary — mid-to-elevated vol, mature data, B-tier representative"
+UNH:
+  tier: A
+  notes: "UnitedHealth — ~$400-500B mature health insurer, deep liquidity, defensive earnings, A-tier representative"
   holders:
     aidy: {state: watching}
-    jesse:
-      state: entered
-      entry: 423.03
-      target: 502.33
-      stop: 375.09
-      entered_date: 2026-05-20
+    jesse: {state: watching}
 
-IONQ:
+# ===================== TIER B — mid-to-large established =====================
+
+AMAT:
+  tier: B
+  notes: "Applied Materials — semi-cap-equipment, AI-capex beneficiary, ~$150B mid-to-elevated vol, mature data, B-tier representative"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+D:
+  tier: B
+  notes: "Dominion Energy — ~$50B regulated utility, low-vol dividend payer, defensive characteristics but B-tier given growth profile"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+GLW:
+  tier: B
+  notes: "Corning — ~$30B specialty glass + optical, mature cyclical, AI/optical-fiber exposure, decades of history"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+INTC:
+  tier: B
+  notes: "Intel — ~$80-120B mature semi in turnaround, foundry-strategy uncertainty, decades of history"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+IPGP:
+  tier: B
+  notes: "IPG Photonics — ~$3-5B fiber-laser leader, mature business, cyclical demand"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+LITE:
+  tier: B
+  notes: "Lumentum — ~$5-7B photonics for telecom + datacom, mature business with decade+ history"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+MOG-A:
+  tier: B
+  notes: "Moog Class A — ~$5-7B aerospace + defense components, mature ~70-year-old business. FMP ticker uses hyphen (MOG-A); T212 URL routes via override map to MOG.A.US"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+MU:
+  tier: B
+  notes: "Micron — ~$100B memory semi, deeply cyclical, AI/HBM-driven upcycle, mature data"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+NOW:
+  tier: B
+  notes: "ServiceNow — ~$170B SaaS workflow platform. Large but still growth-phase, not defensive — B-tier captures the growth-stock risk profile better than A"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+STX:
+  tier: B
+  notes: "Seagate — ~$20B storage (HDD + nearline SSD), mature cyclical, AI-data-capex beneficiary"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+# ===================== TIER C — small-cap / narrative / post-SPAC =====================
+
+ASTS:
   tier: C
-  notes: "Quantum pure-play, narrative-driven fat-tailed catalyst — high vol, post-SPAC ~5y history, C-tier representative"
+  notes: "AST SpaceMobile — ~$5-8B satellite cellular pre-revenue, post-SPAC 2021. Pure-narrative until first commercial service revenue, C-tier captures the binary execution risk"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+ENGN:
+  tier: C
+  notes: "Enovix — ~$500M-1B silicon-anode battery, post-SPAC 2021, narrative + execution-risk story"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+GHM:
+  tier: C
+  notes: "Graham Corp — ~$400M small-cap industrial (cryogenics, defense). Tiny float, low ADV, C-tier by size"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+LWLG:
+  tier: C
+  notes: "Lightwave Logic — ~$300-500M pure-narrative polymer-photonics, multi-year pre-revenue. Maximum-narrative C-tier representative"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+MRAM:
+  tier: C
+  notes: "Everspin Technologies — ~$200-300M MRAM memory niche player, tiny float, deeply C-tier"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+PL:
+  tier: C
+  notes: "Planet Labs — ~$1-1.5B satellite imagery, post-SPAC Dec 2021, narrative-driven with government-contract optionality"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+RKLB:
+  tier: C
+  notes: "Rocket Lab — ~$15B by cap but pure-narrative space launch with ~80%+ realized vol. C-tier by behaviour regardless of cap size; tier classifier would catch this anyway"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+SATS:
+  tier: C
+  notes: "EchoStar — ~$2-3B legacy satellite business with declining revenue profile. C-tier by size + structural challenges"
+  holders:
+    aidy: {state: watching}
+    jesse: {state: watching}
+
+VELO:
+  tier: C
+  notes: "Velo3D — ~$50-100M micro-cap metal-3D-printing, deeply fat-tailed with binary execution risk. Maximum-asymmetry C-tier representative"
   holders:
     aidy: {state: watching}
     jesse: {state: watching}
