@@ -191,3 +191,90 @@ When the user explicitly says they're ready to publish a real run:
 
 You can keep iterating in test mode AT ANY TIME after going live —
 test runs never touch production history.
+
+## Bug-classification rules — what's a bug vs what's not
+
+A previous audit declared the codebase "done — no more bugs to find."
+That kind of declaration creates a cognitive trap: once I've said
+"done," I'm biased to dismiss new findings as "calibration" or "edge
+case" to avoid contradicting myself. To prevent that, the rules for
+what counts as a bug are pinned here. I commit to USING these rules,
+not redefining them when convenient.
+
+### A finding IS a bug if ANY of:
+
+- **Math produces incorrect output** (sign error, wrong convention,
+  divide-by-zero, off-by-one, wrong units, data leak from future
+  into past).
+- **Code crashes on a reasonable input** (where "reasonable" means
+  any state the watchlist + config + FMP could plausibly produce).
+- **Schema mismatch between producer and consumer** (one module
+  emits `horizons[h]["users"][user]`, another reads
+  `horizons[h][user]`).
+- **Silent failure that affects the verdict** (a sub-step fails
+  but no error surfaces, and the downstream verdict changes
+  without the user knowing why).
+- **Behavior diverges from the documented design** (the YAML
+  comment says X, the code does Y).
+- **Same input produces different output across runs** (broken
+  reproducibility, except where deliberately randomized).
+- **Information the system has is not surfaced to the user where a
+  competent swing trader would expect to find it** (e.g. dip-entry
+  zone exists but never connects to the SKIP verdict).
+
+### A finding is NOT a bug if:
+
+- **Calibration knob value** (multiplier, threshold, lookback
+  window). Move to `config/thresholds.yml`, tune with backtest
+  data. Not a bug — a tuning question.
+- **Marginal improvement requiring substantial new complexity**
+  (Heston stochastic vol, multi-asset correlation, intraday data
+  feed). Defer honestly — it's a v2, not a bug.
+- **Genuinely needs accumulated data first** (multi-night
+  trajectory smoothing, sustained tier-mismatch haircut).
+- **Style / cosmetic** (whitespace, naming, docstring grammar
+  that doesn't cause confusion).
+
+### The default-to-bug protocol
+
+When the user reports something that doesn't look right:
+
+1. **Default classification**: POTENTIAL BUG.
+2. The burden of proof is on ME to demonstrate it's NOT a bug
+   (show the math, show the invariant, show the documented design,
+   show the test that already passes).
+3. If I can't demonstrate within a few minutes that it's not a bug,
+   it's a bug. Fix it.
+4. **NEVER** open with "that's expected" or "that's a known
+   limitation" without first checking. Investigation comes BEFORE
+   dismissal.
+
+### How the user can challenge an "this isn't a bug" verdict
+
+If I tell you "that's calibration not a bug," you can force a real
+investigation by asking:
+- "Show me the test that would have caught this if it were a bug."
+- "Walk me through the code path where this is intentional."
+- "Show me the snapshot JSON that proves the value is correct."
+
+If I can't answer with concrete code/data, the finding gets
+escalated back to BUG and fixed.
+
+### Protection mechanisms (not just promises)
+
+Three things in the codebase actively guard against me dismissing
+real bugs:
+
+1. **`tests/` directory** with property-based math tests and
+   regression tests for every bug we've ever fixed. The tests
+   don't have egos — they fail when invariants break, regardless
+   of what I claimed.
+
+2. **Runtime assertions** for invariants that should always hold
+   (probabilities sum to ~1.0, prices stay positive, FCF >= 0
+   when DCF runs, etc.). Loud failures beat silent ones.
+
+3. **Snapshot JSON on disk** with every step's full state.
+   You can verify any claim I make about a number by looking at
+   `data/test/snapshots/{TICKER}/{date}.json` and reading the
+   actual values. I cannot hide behind narrative.
