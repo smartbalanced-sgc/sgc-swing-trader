@@ -188,8 +188,21 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
                 and cat.get("distance_sessions") is not None
                 and cat.get("historical_reactions")):
             dist = int(cat["distance_sessions"])
-            if 1 <= dist <= max(HORIZONS):
-                earnings_jump_day = dist
+            # distance_sessions=0 means "earnings TODAY" - typically
+            # AMC (after market close), so the reaction lands in the
+            # day-1 close-to-close window. distance_sessions=N (N>=1)
+            # means earnings on day N, reaction in close-to-close from
+            # day N-1 to day N (which we represent as the day-N step in
+            # the simulation). For distance=0 we clamp to day 1 since
+            # any AMC reaction will be picked up by the day-1 close.
+            # Without this clamp, the jump silently disappears the
+            # morning of the earnings date — leaving MC to project
+            # pure-GBM through what is empirically the most variable
+            # day in the horizon (NVDA going from SKIP to WAIT just
+            # because the calendar rolled forward one day is the
+            # symptom; the underlying earnings risk is unchanged).
+            if 0 <= dist <= max(HORIZONS):
+                earnings_jump_day = max(dist, 1)
                 earnings_reactions = [
                     float(r["reaction_pct"]) / 100.0
                     for r in cat["historical_reactions"]
