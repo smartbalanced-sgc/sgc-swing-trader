@@ -297,5 +297,53 @@ class TestFMPRetryRespectsPermanentErrors(unittest.TestCase):
             "429 (rate limit) MUST be retryable")
 
 
+class TestDataDepthHaircut(unittest.TestCase):
+    """Layer-2 data-depth haircut surfaces the cost of thin price history
+    explicitly in the conviction breakdown rather than letting it leak
+    through indirect haircuts (MC-PDE disagreement, trajectory
+    instability). Per CLAUDE.md bug bar: information the system has must
+    be surfaced where a competent swing trader would expect to find it."""
+
+    def _evaluate_with_bars(self, bar_count):
+        from src import conviction
+        inputs = {
+            "p_target": 0.35, "p_stop": 0.30, "ev_normalized": 0.10,
+            "user_state": "watching",
+            "mc_pde_p_target_delta_pp": 1.0,
+            "trajectory_direction_changes": 0,
+            "watchlist_tier": "A", "measured_tier": "A",
+            "tier_mismatch_consecutive_nights": 0,
+            "price_bar_count": bar_count,
+            "catalyst_distance_sessions": None,
+            "regime_state": "uptrend_quiet", "regime_confidence": 0.50,
+            "fair_value_premium_sigmas": 0.0,
+            "avg_daily_dollar_volume": 1e9,
+        }
+        return conviction.evaluate(inputs, horizon_days=30)
+
+    def test_mature_history_no_haircut(self):
+        result = self._evaluate_with_bars(2000)
+        depth = next(h for h in result["layer2_confidence"]["haircuts"] if h["name"] == "Data depth")
+        self.assertEqual(depth["haircut"], 0.0, "≥1500 bars must be the no-haircut reference")
+        self.assertTrue(depth["passed"])
+
+    def test_moderate_history_10pct_haircut(self):
+        result = self._evaluate_with_bars(1100)
+        depth = next(h for h in result["layer2_confidence"]["haircuts"] if h["name"] == "Data depth")
+        self.assertAlmostEqual(depth["haircut"], 0.10, msg="750-1499 bars must apply 10% haircut")
+
+    def test_thin_history_25pct_haircut(self):
+        result = self._evaluate_with_bars(500)
+        depth = next(h for h in result["layer2_confidence"]["haircuts"] if h["name"] == "Data depth")
+        self.assertAlmostEqual(depth["haircut"], 0.25, msg="250-749 bars must apply 25% haircut")
+
+    def test_haircut_compounds_into_confidence_multiplier(self):
+        # 25% data-depth haircut alone should drop the L2 multiplier to ~0.75
+        # (all other haircuts at 0). Validates the haircut actually
+        # affects the confidence number, not just the report metadata.
+        result = self._evaluate_with_bars(500)
+        self.assertAlmostEqual(result["layer2_confidence"]["multiplier"], 0.75, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -171,6 +171,20 @@ conviction:
     tier_mismatch:
       min_consecutive_nights_of_disagreement: 5
       haircut: 0.20
+    # Data depth — shorter price history means every downstream estimator
+    # (GARCH, regime classifier, MC bootstrap, tier classifier) is fitting
+    # to fewer observations. Bands chosen against typical mature names
+    # carrying ~1500+ trading bars (≈ 6 years) as the "no haircut"
+    # reference. Below 250 bars the engine refuses to render a verdict at
+    # all (returns "pending") because GARCH and the empirical jump
+    # distribution become unreliable; the bands below cover the actionable
+    # middle. Per CLAUDE.md §"investor-grade engine": surfaces the
+    # data-depth penalty explicitly rather than hiding it inside indirect
+    # haircuts (MC-PDE disagreement, trajectory instability).
+    data_depth:
+      mature_band:    {min_bars: 1500, haircut: 0.00}  # ≥6y — no haircut
+      moderate_band:  {min_bars: 750,  haircut: 0.10}  # 3-6y
+      thin_band:      {min_bars: 250,  haircut: 0.25}  # 1-3y
 
   # Layer 3 — vetoes. Change the verdict LABEL based on conditions,
   # independent of the conviction score number.

@@ -208,6 +208,32 @@ def _layer2_confidence(inputs: dict, haircut_cfg) -> dict:
         "passed": tier_haircut == 0.0,
     })
 
+    # Data depth — short price history weakens every downstream estimator
+    # (GARCH long-run variance, regime feature window, MC empirical-jump
+    # bootstrap, tier classifier inner window). Bands chosen so ≥1500
+    # bars (≈6y, the typical mature S&P name) is the no-haircut reference;
+    # 750-1500 (~3-6y, includes most post-SPAC names) gets 10%; 250-750
+    # (~1-3y, recent IPOs) gets 25%. Below 250 the upstream steps refuse
+    # to render at all and we never get here. See thresholds.yml.
+    bars = inputs.get("price_bar_count", 0)
+    depth_cfg = haircut_cfg.data_depth
+    if bars >= depth_cfg.mature_band.min_bars:
+        depth_haircut = depth_cfg.mature_band.haircut
+        depth_band = f"mature (≥{depth_cfg.mature_band.min_bars} bars)"
+    elif bars >= depth_cfg.moderate_band.min_bars:
+        depth_haircut = depth_cfg.moderate_band.haircut
+        depth_band = f"moderate ({depth_cfg.moderate_band.min_bars}-{depth_cfg.mature_band.min_bars - 1} bars)"
+    else:
+        depth_haircut = depth_cfg.thin_band.haircut
+        depth_band = f"thin ({depth_cfg.thin_band.min_bars}-{depth_cfg.moderate_band.min_bars - 1} bars)"
+    haircuts.append({
+        "name": "Data depth",
+        "detail": f"{bars} price bars (~{bars/252:.1f}y of history)",
+        "band": depth_band,
+        "haircut": depth_haircut,
+        "passed": depth_haircut == 0.0,
+    })
+
     # Compound multiplicatively
     multiplier = 1.0
     for h in haircuts:

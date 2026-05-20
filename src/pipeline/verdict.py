@@ -368,6 +368,7 @@ def _build_common_inputs(snap: dict) -> dict:
         "watchlist_tier": snap.get("tier_anchor", "B"),
         "measured_tier": tier_cls.get("measured_tier", snap.get("tier_anchor", "B")),
         "tier_mismatch_consecutive_nights": 0,    # requires multi-night history
+        "price_bar_count": int((snap.get("data") or {}).get("bar_count", 0)),
 
         # Layer-3 veto inputs
         "catalyst_distance_sessions": catalyst_block.get("distance_sessions"),
