@@ -171,6 +171,30 @@ def detect(ticker: str, price_data: dict, tier: str | None = None, refresh: bool
             earnings_events, price_data.get("prices", [])
         )
 
+    # --- Sub-fetch 1b: options-implied move (only if upcoming earnings)
+    # The market's expected event-day move expressed as the ATM
+    # straddle price / spot, for the option expiry nearest after the
+    # earnings date. Used as a SECOND variance source for the MC
+    # earnings-jump overlay (blended 50/50 with the empirical bootstrap)
+    # so the jump distribution reflects both the historical reaction
+    # pattern AND the market's current variance forecast.
+    if payload["next_event"] is not None:
+        current_price = (price_data.get("profile") or {}).get("price")
+        if not current_price:
+            prices = price_data.get("prices") or []
+            current_price = (prices[-1].get("adj_close") or prices[-1].get("close")) if prices else None
+        if current_price:
+            implied = _safe(
+                payload,
+                "options_implied_move",
+                lambda: _fetch_options_implied_move(
+                    ticker, payload["next_event"]["date"], float(current_price)
+                ),
+            )
+            if implied is not None:
+                payload["options_implied_move_pct"] = implied["implied_move_pct"]
+                payload["options_implied_move_detail"] = implied
+
     # --- Sub-fetch 2: recent news headlines ---
     news = _safe(payload, "news", _fetch_news, ticker)
     if news:
@@ -318,6 +342,125 @@ def _fetch_price_target_consensus(ticker: str) -> dict | None:
         "high": row.get("targetHigh"),
         "low": row.get("targetLow"),
         "consensus": row.get("targetConsensus"),
+    }
+
+
+# ---------- yfinance options-chain fetcher (for implied move) ----------
+
+
+def _fetch_options_implied_move(
+    ticker: str, event_date_iso: str, current_price: float
+) -> dict | None:
+    """Compute the at-the-money straddle's implied event-day move using
+    yfinance's options chain.
+
+    Method (industry-standard "straddle-derived implied move"):
+      1. Pull all option expiries, pick the EARLIEST that is on or
+         after the earnings event (post-event variance is what we want
+         - "what does the market think the move will be?").
+      2. Pull that expiry's call + put chains.
+      3. Find the ATM call and ATM put (strike nearest to current spot).
+      4. Compute mid-prices ((bid+ask)/2; fall back to lastPrice if
+         bid/ask missing).
+      5. Straddle = atm_call_mid + atm_put_mid.
+      6. Implied move (as fraction of spot) = straddle / spot.
+
+    Caveats:
+      - For tickers with no options or illiquid chains, fails gracefully
+        (returns None - MC then uses pure empirical bootstrap).
+      - Sanity-clipped to [1%, 50%]; outside that range we assume the
+        data is broken (wide spreads, mispriced contracts, stale quotes).
+      - yfinance may be rate-limited on shared CI - we use curl_cffi
+        TLS impersonation when available, same as short_interest module.
+
+    Returns dict with implied_move_pct + diagnostic fields, or None
+    on any failure (caller treats None as "data unavailable, use
+    fallback").
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        raise RuntimeError("yfinance not installed")
+
+    # Hardened session (matches src/data_sources/short_interest.py
+    # pattern). Falls back to default requests if curl_cffi missing.
+    session = None
+    try:
+        from curl_cffi import requests as curl_requests
+        session = curl_requests.Session(impersonate="chrome131")
+    except ImportError:
+        pass
+
+    y_ticker = yf.Ticker(ticker, session=session) if session else yf.Ticker(ticker)
+
+    try:
+        expiries = y_ticker.options
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"yfinance options listing failed: {e}")
+
+    if not expiries:
+        return None
+
+    # Pick the earliest expiry on or after the earnings date.
+    event_d = date.fromisoformat(event_date_iso[:10])
+    target_expiry: str | None = None
+    for exp in expiries:
+        try:
+            exp_d = date.fromisoformat(exp)
+        except (ValueError, TypeError):
+            continue
+        if exp_d >= event_d:
+            target_expiry = exp
+            break
+    if target_expiry is None:
+        return None  # All expiries before the event - unusual but possible
+
+    try:
+        chain = y_ticker.option_chain(target_expiry)
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"yfinance option_chain failed for {target_expiry}: {e}")
+
+    calls = chain.calls
+    puts = chain.puts
+    if calls is None or puts is None or calls.empty or puts.empty:
+        return None
+
+    # ATM = closest strike to spot for each side.
+    calls_dist = (calls["strike"] - current_price).abs()
+    puts_dist = (puts["strike"] - current_price).abs()
+    atm_call = calls.loc[calls_dist.idxmin()]
+    atm_put = puts.loc[puts_dist.idxmin()]
+
+    def _mid(row) -> float | None:
+        bid = float(row.get("bid", 0) or 0)
+        ask = float(row.get("ask", 0) or 0)
+        if bid > 0 and ask > 0 and ask >= bid:
+            return (bid + ask) / 2.0
+        last = float(row.get("lastPrice", 0) or 0)
+        return last if last > 0 else None
+
+    call_mid = _mid(atm_call)
+    put_mid = _mid(atm_put)
+    if call_mid is None or put_mid is None:
+        return None
+
+    straddle = call_mid + put_mid
+    implied_move_pct = straddle / current_price
+
+    # Sanity range — outside [1%, 50%] is almost certainly broken data
+    # (stale quotes, wide bid/ask, mispriced expiry).
+    if not (0.01 <= implied_move_pct <= 0.50):
+        return None
+
+    return {
+        "implied_move_pct": implied_move_pct,
+        "expiry": target_expiry,
+        "atm_call_strike": float(atm_call["strike"]),
+        "atm_put_strike": float(atm_put["strike"]),
+        "call_mid": call_mid,
+        "put_mid": put_mid,
+        "straddle": straddle,
+        "spot": current_price,
     }
 
 

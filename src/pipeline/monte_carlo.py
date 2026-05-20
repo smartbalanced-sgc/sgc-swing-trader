@@ -183,6 +183,7 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
     cat = snap.get("catalyst") or {}
     earnings_reactions: list[float] = []
     earnings_jump_day: int | None = None
+    options_implied_move: float | None = None
     if _EARNINGS_JUMP_ON:
         ne = cat.get("next_event") or {}
         if (ne.get("type") == "earnings"
@@ -196,12 +197,6 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
             # day N-1 to day N (which we represent as the day-N step in
             # the simulation). For distance=0 we clamp to day 1 since
             # any AMC reaction will be picked up by the day-1 close.
-            # Without this clamp, the jump silently disappears the
-            # morning of the earnings date — leaving MC to project
-            # pure-GBM through what is empirically the most variable
-            # day in the horizon (NVDA going from SKIP to WAIT just
-            # because the calendar rolled forward one day is the
-            # symptom; the underlying earnings risk is unchanged).
             if 0 <= dist <= max(HORIZONS):
                 earnings_jump_day = max(dist, 1)
                 earnings_reactions = [
@@ -211,6 +206,22 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
                 ]
                 if not earnings_reactions:
                     earnings_jump_day = None  # no reactions = no jump
+                else:
+                    # Optional second variance source: the market's
+                    # straddle-implied move from the option chain
+                    # (catalyst step fetches this via yfinance when an
+                    # earnings event is upcoming). When present, MC
+                    # blends 50/50 with the empirical bootstrap so
+                    # the jump distribution reflects BOTH the historical
+                    # reaction pattern (direction bias) AND the market's
+                    # current variance forecast (the option market's
+                    # expected magnitude). Caveat: implied move is a
+                    # FRACTIONAL move (e.g. 0.06 = ±6%), used as the
+                    # std-dev of a Gaussian centered at the empirical
+                    # log-return mean.
+                    raw = cat.get("options_implied_move_pct")
+                    if raw is not None and 0.01 <= raw <= 0.50:
+                        options_implied_move = float(raw)
 
     # --- Random seed: reproducible per (ticker, run_date) ---
     seed = _seed_for(ticker, run_date)
@@ -232,6 +243,7 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
         rng=rng,
         earnings_jump_day=earnings_jump_day,
         earnings_reactions=earnings_reactions,
+        options_implied_move=options_implied_move,
     )
 
     # --- Forecast trading dates aligned to path day indices ---
@@ -296,6 +308,8 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
             "earnings_jump_day_in_30d_horizon": earnings_jump_day is not None and earnings_jump_day <= HORIZONS[0],
             "earnings_jump_day_in_60d_horizon": earnings_jump_day is not None and earnings_jump_day <= HORIZONS[1],
             "earnings_reactions_count": len(earnings_reactions),
+            "options_implied_blend_active": options_implied_move is not None,
+            "options_implied_move": options_implied_move,
         },
         "drift_annualized": drift_annualized,
         "vol_annualized": sigma_annualized,
@@ -317,6 +331,7 @@ def _simulate_paths(
     rng: np.random.Generator,
     earnings_jump_day: int | None,
     earnings_reactions: list[float],
+    options_implied_move: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None]:
     """Generate n_paths x n_days price matrices.
 
@@ -364,9 +379,32 @@ def _simulate_paths(
     reactions = np.asarray(earnings_reactions, dtype=float)
     log_reactions = np.log(1.0 + reactions)
     log_returns_with_jump = log_returns_base.copy()
-    log_returns_with_jump[:, day_idx] = rng.choice(
-        log_reactions, size=n_paths, replace=True
-    )
+
+    if options_implied_move is not None and options_implied_move > 0:
+        # Blended jump: 50% from empirical bootstrap (captures direction
+        # bias and skew from the ticker's actual reaction history) +
+        # 50% from a Gaussian centered at empirical mean with std =
+        # options-implied move (captures the market's current variance
+        # forecast - typically wider than recent empirical for stocks
+        # heading into uncertain reports, tighter when the market thinks
+        # the print will be "in line").
+        n_empirical = n_paths // 2
+        n_gaussian = n_paths - n_empirical
+        empirical_samples = rng.choice(log_reactions, size=n_empirical, replace=True)
+        empirical_mean = float(np.mean(log_reactions))
+        # Convert fractional implied move to log-return std: log(1+m) ~ m
+        # for small m. Use log(1+implied) for accuracy.
+        gaussian_std = math.log(1.0 + options_implied_move)
+        gaussian_samples = rng.normal(empirical_mean, gaussian_std, size=n_gaussian)
+        blended = np.concatenate([empirical_samples, gaussian_samples])
+        rng.shuffle(blended)  # break the empirical-first ordering
+        log_returns_with_jump[:, day_idx] = blended
+    else:
+        # Pure empirical bootstrap (no options data, or sanity check failed)
+        log_returns_with_jump[:, day_idx] = rng.choice(
+            log_reactions, size=n_paths, replace=True
+        )
+
     log_prices_with_jump = np.cumsum(log_returns_with_jump, axis=1)
     paths_with_jump = s0 * np.exp(log_prices_with_jump)
 
