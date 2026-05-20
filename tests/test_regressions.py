@@ -60,84 +60,110 @@ class TestEarningsJumpAtDistanceZero(unittest.TestCase):
             "When distance=0, jump must clamp to day 1")
 
 
-class TestBacktestProfilePriceLeak(unittest.TestCase):
-    """Bug fixed in commit 40d5957.
-    Description: _build_historical_snapshot was passing the CURRENT
-    FMP profile (with today's market price) into historical snaps.
-    Targets module read profile.price and used today's price for all
-    historical as-of evaluations. Backtest results were meaningless.
-    Failure mode caught: if anyone re-introduces full_profile as the
-    snap's profile without overriding price, this test fails.
-    """
-
-    def test_historical_snapshot_overrides_profile_price_with_as_of_close(self):
-        from datetime import date
-        from src import backtest
-        truncated = [
-            {"date": "2025-05-28", "close": 119.0, "adj_close": 119.0,
-             "high": 120, "low": 117},
-            {"date": "2025-05-30", "close": 120.5, "adj_close": 120.5,
-             "high": 121, "low": 119},
-        ]
-        full_profile = {
-            "price": 225.32,           # TODAY's price (would-be leak)
-            "market_cap": 5.48e12,
-            "shares_outstanding": 24.32e9,
-            "sector": "Technology",
-        }
-        snap = backtest._build_historical_snapshot(
-            ticker="NVDA",
-            as_of=date(2025, 6, 1),
-            truncated_prices=truncated,
-            full_profile=full_profile,
-            full_earnings=[],
-            entry={"tier": "A", "holders": {"backtest": {"state": "watching"}}},
-        )
-        # The historical profile must use the as-of close, NOT today's price.
-        historical_price = snap["data"]["profile"]["price"]
-        self.assertAlmostEqual(historical_price, 120.5, places=2,
-            msg=f"Historical profile.price = ${historical_price}; "
-                f"expected $120.50 (as-of close), got today's $225.32 leak")
-
-
-class TestBacktestRealizedOutcomeIntraday(unittest.TestCase):
-    """Bug fixed in commit 40d5957.
-    Description: _compute_realized_outcome checked daily CLOSES only.
-    A real Trading 212 stop-loss order fires INTRADAY when price
-    touches the stop, not at the close. Using closes systematically
-    undercounts hits — the same daily-monitoring bias MC's Brownian
-    bridge correction now addresses for simulations.
-    Failure mode caught: if someone reverts to close-based realized
-    detection, this test catches it.
+class TestBacktestIntradayFirstPassage(unittest.TestCase):
+    """The backtest must use intraday high/low — not daily closes — when
+    scoring whether a target or stop was actually hit. A Trading 212
+    stop-loss order fires the moment price TOUCHES the stop intraday,
+    not at the close. Using closes would systematically undercount
+    stop-hits (and target-hits).
+    Failure mode caught: anyone simplifying _first_passage to use only
+    closes will break this test.
     """
 
     def test_intraday_low_below_stop_triggers_stop_hit(self):
         from src import backtest
         # Day 2: low = 88 (below stop=90), close = 95 (above stop)
-        # Old behavior: stop NOT hit. New behavior: stop hit on day 2.
-        future_prices = [
+        # A close-only check would MISS this. Intraday must catch it.
+        window = [
             {"date": "d1", "high": 102, "low": 99, "close": 100, "adj_close": 100},
             {"date": "d2", "high": 100, "low": 88, "close": 95, "adj_close": 95},
         ] + [{"date": f"d{i}", "high": 96, "low": 94, "close": 95, "adj_close": 95}
-             for i in range(3, 31)]
-        outcome = backtest._compute_realized_outcome(
-            future_prices, target_price=120, stop_price=90, horizon_days=20)
+             for i in range(3, 21)]
+        outcome = backtest._first_passage(window, target_price=120, stop_price=90)
         self.assertEqual(outcome["outcome"], "stop",
             "Intraday low 88 < stop 90 must trigger stop-hit, even though close 95 > 90")
+        self.assertTrue(outcome["stop_hit"])
         self.assertEqual(outcome["first_passage_day"], 2)
 
     def test_intraday_high_above_target_triggers_target_hit(self):
         from src import backtest
-        future_prices = [
+        window = [
             {"date": "d1", "high": 105, "low": 99, "close": 102, "adj_close": 102},
             {"date": "d2", "high": 125, "low": 100, "close": 110, "adj_close": 110},
         ] + [{"date": f"d{i}", "high": 112, "low": 108, "close": 110, "adj_close": 110}
-             for i in range(3, 31)]
-        outcome = backtest._compute_realized_outcome(
-            future_prices, target_price=120, stop_price=90, horizon_days=20)
+             for i in range(3, 21)]
+        outcome = backtest._first_passage(window, target_price=120, stop_price=90)
         self.assertEqual(outcome["outcome"], "target",
             "Intraday high 125 >= target 120 must trigger target-hit")
+        self.assertTrue(outcome["target_hit"])
         self.assertEqual(outcome["first_passage_day"], 2)
+
+
+class TestBacktestDipAndRallyChecks(unittest.TestCase):
+    """The backtest must verify BOTH the dip prediction (did the daily
+    LOW touch the predicted dip level?) AND the rally prediction (did
+    the daily HIGH touch the predicted rally level?) — that's what
+    'check both dips and rallies' means. A symmetric check on the MC
+    output, independent of any per-user verdict.
+    """
+
+    def test_dip_hit_detects_intraday_low_touching_level(self):
+        from src import backtest
+        # Predicted dip = 95. The window has a day where low touches 94.
+        window = [
+            {"high": 102, "low": 98, "close": 100, "adj_close": 100},
+            {"high": 100, "low": 94, "close": 99, "adj_close": 99},
+            {"high": 101, "low": 97, "close": 100, "adj_close": 100},
+        ]
+        self.assertTrue(backtest._touched_below(window, 95),
+            "Daily low 94 <= dip level 95 must count as 'dip happened'")
+
+    def test_rally_hit_detects_intraday_high_touching_level(self):
+        from src import backtest
+        # Predicted rally = 110. The window has a day where high reaches 112.
+        window = [
+            {"high": 102, "low": 98, "close": 100, "adj_close": 100},
+            {"high": 112, "low": 100, "close": 105, "adj_close": 105},
+            {"high": 108, "low": 104, "close": 106, "adj_close": 106},
+        ]
+        self.assertTrue(backtest._touched_above(window, 110),
+            "Daily high 112 >= rally level 110 must count as 'rally happened'")
+
+    def test_dip_miss_when_low_never_reaches_level(self):
+        from src import backtest
+        # Predicted dip = 90, but the window's lowest low is 96 — dip never happened.
+        window = [
+            {"high": 102, "low": 99, "close": 100, "adj_close": 100},
+            {"high": 101, "low": 96, "close": 99, "adj_close": 99},
+        ]
+        self.assertFalse(backtest._touched_below(window, 90),
+            "Lowest low 96 > dip level 90 means the dip didn't happen")
+
+    def test_rally_miss_when_high_never_reaches_level(self):
+        from src import backtest
+        # Predicted rally = 130, but window's highest high is 108 — rally didn't happen.
+        window = [
+            {"high": 102, "low": 99, "close": 100, "adj_close": 100},
+            {"high": 108, "low": 100, "close": 105, "adj_close": 105},
+        ]
+        self.assertFalse(backtest._touched_above(window, 130),
+            "Highest high 108 < rally level 130 means the rally didn't happen")
+
+
+class TestBacktestColdStartGate(unittest.TestCase):
+    """When fewer than MIN_HISTORY_TRADING_DAYS of snapshots have
+    accumulated, the backtest must return 'insufficient_data' rather
+    than empty/misleading metrics. Cold-start honesty.
+    """
+
+    def test_empty_snapshot_archive_returns_insufficient_data(self):
+        from unittest import mock
+        from src import backtest
+        with mock.patch.object(backtest, "_accumulated_snapshot_dates", return_value=[]):
+            out = backtest.run({})
+        self.assertEqual(out["status"], "insufficient_data")
+        self.assertEqual(out["days_of_history"], 0)
+        self.assertEqual(out["days_needed"], backtest.MIN_HISTORY_TRADING_DAYS)
 
 
 class TestConvictionSchemaDirectUserKey(unittest.TestCase):

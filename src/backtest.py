@@ -1,830 +1,439 @@
-"""Walk-forward backtest harness.
+"""Inline forward-tracking backtest.
 
-Replays the engine on historical sample dates and compares predicted
-verdict outcomes (P(target), P(stop), EV, verdict label) against
-realized outcomes from actual subsequent prices. This is what separates
-"the math looks right" from "the math worked."
+This is NOT walk-forward replay. It does not re-run the engine on
+historical dates. Instead it follows the dip-engine pattern
+(sgc-dip-engine `signal_archiver.py` + `backtest.py`):
 
-How it works:
+  1. Every nightly run writes a snapshot to data/snapshots/{TICKER}/.
+     That snapshot already contains every prediction the engine made
+     that night — predicted dip price, predicted rally price, per-user
+     target, per-user stop, verdict label, the lot. So the snapshot
+     archive IS the signal-history archive; no separate CSV needed.
 
-  For each (ticker, sample_date) pair:
-    1. Build a "historical snapshot" using ONLY data available as of
-       sample_date. Most pipeline steps work fine on truncated price
-       data; some upstream inputs (analyst grades, fair value, news,
-       options-implied move) require current-only FMP endpoints and
-       are intentionally omitted (the conviction module's graceful
-       degradation handles missing inputs by defaulting to "no veto,
-       no haircut" - the backtest's verdicts are therefore CONSERVATIVE
-       relative to a production run that has all the inputs).
-    2. Run the verdict synthesis to get the verdict label, score, and
-       MC-derived P(target) / P(stop) / EV per (user, horizon).
-    3. Look at actual prices from sample_date+1 to sample_date+horizon
-       trading days; compute the realized first-passage outcome
-       (target hit first / stop hit first / neither) and the realized
-       terminal return.
-    4. Record one row per (sample_date, ticker, horizon) with both
-       the predicted and realized values.
+  2. This module reads accumulated snapshots and, for each snapshot
+     old enough that its horizon has elapsed (e.g. a 30d-horizon
+     snapshot from 30 trading days ago), compares the predictions to
+     what actually happened. Two questions per (ticker, snapshot, horizon):
 
-  After all snapshots are processed, aggregate:
-    - Hit rate per verdict label (do ENTERs actually outperform SKIPs?)
-    - Mean realized return per verdict
-    - Calibration: predicted P(target) decile vs realized hit rate per
-      decile (the engine's probabilities should map linearly to
-      realized frequencies if the model is well-calibrated)
+       a) DID THE DIP HAPPEN? — did the daily LOW ever touch the
+          predicted `price_levels.horizons[h].dip.price` within the
+          horizon window?
+       b) DID THE RALLY HAPPEN? — did the daily HIGH ever touch the
+          predicted `price_levels.horizons[h].rally.price` within the
+          horizon window?
 
-What this backtest CAN'T evaluate (intentionally documented):
+     And per-user (using the verdict's target/stop):
 
-  - News flow, analyst grades, fair-value premium, options-implied
-    move: FMP Starter only exposes CURRENT versions of these. Treating
-    them as if they were "as-of" would leak future data. Skipped.
-  - Tier classifier sanity check (current vol may not match as-of vol):
-    we use truncated-price vol for the as-of measured tier.
-  - Multi-night trajectory: requires accumulated snapshot history that
-    starts ACCUMULATING the day we ship to production. Defaults to
-    "0 direction changes, stable" in the backtest, same as Step 8
-    defaults for now.
+       c) DID THE TARGET HIT? — daily HIGH >= target_price ever.
+       d) DID THE STOP HIT? — daily LOW <= stop_price ever.
+       e) FIRST-PASSAGE — which happened first, target or stop or
+          neither?
 
-  All of these default to "neutral" (no veto, no haircut) - so the
-  backtest doesn't FALSE-FIRE haircuts that production would also not
-  fire. It just LACKS some of the haircut signals production has.
+     Intraday extremes (high/low) are used because Trading 212
+     limit/stop orders fire intraday, not on the close.
 
-Realized-outcome convention:
+  3. Per-verdict aggregates: target-hit rate, stop-hit rate, mean
+     realized return per verdict label per horizon. Plus the
+     dip/rally-prediction calibration that's verdict-independent.
 
-  Daily-close first-passage. Same monitoring discretization a real
-  Trading 212 user would observe. No Brownian bridge correction on
-  realized outcomes (it's not "what could have happened intraday" -
-  it's "what was the actual close at the end of each day"). This
-  intentionally matches the user's executional reality, not the
-  continuous-time mathematical idealization.
+Cold start: snapshots accumulate over time. The first 14 trading
+days after going live there isn't enough data — the panel shows
+"X of 14 days of history accumulated." After day 14 the first
+30d-horizon predictions start aging into testability; 60d follows
+later. This is honest cold-start behavior, not a bug.
 
-Output: JSON file at data/backtest/{YYYY-MM-DD}.json with the full
-run config, per-trade detail, and aggregated metrics.
-
-CLI:
-
-  python -m src.backtest --tickers NVDA AMAT IONQ --from 2025-06-01 --to 2026-04-01
-  python -m src.backtest --tickers NVDA --from 2025-06-01 --to 2026-04-01 --every 14
-  python -m src.backtest --tickers NVDA --as-of 2026-01-15  # single-date dry run
-
-The backtest can be run today on whatever historical data exists, then
-re-run periodically as more nights of production accumulate. Eventually
-the "predicted vs realized" comparison becomes the most important
-diagnostic in the system.
+This module is called inline by main.py after the per-ticker pipeline
+loop completes — milliseconds of compute, no extra API calls (price
+data is reused from the live run's data.fetch results).
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
-import math
-import sys
-import traceback
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from pathlib import Path
 
-import numpy as np
-import yaml
-
-from src import config, conviction, tier_classifier
-from src.pipeline import (
-    data as data_step,
-    regime as regime_step,
-    volatility as vol_step,
-    targets as targets_step,
-    monte_carlo as mc_step,
-    analytic_verifier as av_step,
-    verdict as verdict_step,
-)
+from src import config
 
 logger = logging.getLogger(__name__)
+
+# Trading days a snapshot must be old before its predictions are
+# testable. Same as dip engine's default (14). Below this, no
+# meaningful sample of outcomes has elapsed.
+MIN_HISTORY_TRADING_DAYS = 14
+
+# Per-horizon: a snapshot's predictions are evaluable only after this
+# many trading days have passed since the snapshot date (so we have
+# the full forward window of bars to check against). At 30, a 30d
+# horizon prediction has its full window of evidence; same for 60.
+def _required_future_bars(horizon_days: int) -> int:
+    return horizon_days
 
 
 # ---------- public API ----------
 
 
-def run(
-    tickers: list[str],
-    as_of_start: date,
-    as_of_end: date,
-    sample_every_days: int = 7,
-    horizons: tuple[int, ...] | None = None,
-) -> dict:
-    """Run the full walk-forward backtest.
+def run(price_data_by_ticker: dict[str, dict]) -> dict:
+    """Read accumulated snapshots, score predictions whose horizon has
+    elapsed, return the aggregate payload for the dashboard.
 
     Args:
-        tickers: list of ticker symbols to backtest.
-        as_of_start: first sample date.
-        as_of_end: last sample date. Must be at least max(horizons)
-            trading days in the past (or realized outcomes won't exist).
-        sample_every_days: gap between consecutive sample dates
-            (calendar days). 7 = weekly is a reasonable default;
-            smaller = more samples, but also more correlated (samples
-            7 days apart see overlapping horizons).
-        horizons: which horizons to backtest. Defaults to config.HORIZONS.
+        price_data_by_ticker: {ticker: data.fetch() result}. Used as
+            the source of "what actually happened" — the price bars
+            after each snapshot's date. Passed in (not re-fetched)
+            so this module is free of network I/O.
 
-    Returns the run payload (also written to disk):
+    Returns dashboard-shaped payload:
         {
-            "run_config": {...},
-            "trades": [{...}, ...],
-            "metrics": {...},
+            "status": "ok" | "insufficient_data",
+            "days_of_history": int,
+            "trades_evaluated": int,
+            "by_horizon": {
+                30: {
+                    "n": int,
+                    "target_hit_rate": float,    # 0..1
+                    "stop_hit_rate": float,
+                    "dip_hit_rate": float,       # MC dip prediction
+                    "rally_hit_rate": float,     # MC rally prediction
+                    "by_verdict": {label: {n, target_hit_rate, stop_hit_rate}},
+                },
+                60: {...},
+            },
+            "summary": str,
         }
     """
-    horizons = horizons or config.HORIZONS
-    watchlist = _load_watchlist()
+    snapshot_dates = _accumulated_snapshot_dates()
+    days_of_history = len(snapshot_dates)
 
-    all_trades: list[dict] = []
-    skipped: list[dict] = []
+    if days_of_history < MIN_HISTORY_TRADING_DAYS:
+        return {
+            "status": "insufficient_data",
+            "days_of_history": days_of_history,
+            "days_needed": MIN_HISTORY_TRADING_DAYS,
+            "summary": (
+                f"Backtest accumulates as snapshots accrue. "
+                f"{days_of_history} of {MIN_HISTORY_TRADING_DAYS} days "
+                f"of history available — predictions become testable as "
+                f"the horizon elapses on each accumulated snapshot."
+            ),
+        }
 
-    for ticker in tickers:
-        ticker = ticker.upper()
-        entry = watchlist.get(ticker)
-        if entry is None:
-            logger.warning(f"{ticker}: not in watchlist; using default tier B")
-            entry = {"tier": "B", "holders": {"backtest": {"state": "watching"}}}
-        else:
-            # Backtest evaluates from the "watching" perspective only -
-            # entry/exit decisions are what the engine is for. Strip
-            # user-specific entered state so the backtest sees a
-            # consistent watching-state evaluation.
-            entry = {
-                "tier": entry.get("tier", "B"),
-                "holders": {"backtest": {"state": "watching"}},
-            }
-
-        try:
-            full_price_data = data_step.fetch(ticker)
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"{ticker}: data fetch failed: {e}; skipping ticker")
-            skipped.append({"ticker": ticker, "reason": f"data fetch failed: {e}"})
-            continue
-
-        full_earnings = _fetch_full_earnings_history(ticker)
-
-        sample_dates = _generate_sample_dates(
-            full_price_data, as_of_start, as_of_end, sample_every_days
-        )
-        logger.info(f"{ticker}: {len(sample_dates)} sample dates")
-
-        for as_of in sample_dates:
-            try:
-                trade_rows = _evaluate_at(
-                    ticker=ticker,
-                    as_of=as_of,
-                    entry=entry,
-                    full_price_data=full_price_data,
-                    full_earnings=full_earnings,
-                    horizons=horizons,
-                )
-                all_trades.extend(trade_rows)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"{ticker} {as_of}: {e}")
-                skipped.append({
-                    "ticker": ticker, "as_of": as_of.isoformat(),
-                    "reason": str(e),
-                })
-
-    metrics = _aggregate_metrics(all_trades)
-
-    payload = {
-        "run_config": {
-            "tickers": tickers,
-            "as_of_start": as_of_start.isoformat(),
-            "as_of_end": as_of_end.isoformat(),
-            "sample_every_days": sample_every_days,
-            "horizons": list(horizons),
-            "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-        "summary": {
-            "trades_evaluated": len(all_trades),
-            "skipped": len(skipped),
-        },
-        "metrics": metrics,
-        "trades": all_trades,
-        "skipped": skipped,
-    }
-
-    return payload
-
-
-# ---------- per-(ticker, as_of) evaluation ----------
-
-
-def _evaluate_at(
-    ticker: str,
-    as_of: date,
-    entry: dict,
-    full_price_data: dict,
-    full_earnings: list[dict],
-    horizons: tuple[int, ...],
-) -> list[dict]:
-    """Build a historical snapshot at `as_of`, run verdict, compute
-    realized outcomes for each horizon. Returns one row per horizon."""
-    truncated_prices = _truncate_prices(full_price_data["prices"], as_of)
-    if len(truncated_prices) < 252 + 1:
-        raise RuntimeError(
-            f"insufficient history (only {len(truncated_prices)} bars before {as_of}); "
-            f"need >= 253 for vol + regime"
-        )
-
-    snap = _build_historical_snapshot(
-        ticker=ticker,
-        as_of=as_of,
-        truncated_prices=truncated_prices,
-        full_profile=full_price_data.get("profile") or {},
-        full_earnings=full_earnings,
-        entry=entry,
+    horizons = (
+        config.THRESHOLDS.horizons.primary_days,
+        config.THRESHOLDS.horizons.secondary_days,
     )
 
-    # Run the pipeline math
-    tier = entry.get("tier")
-    snap["tier_classifier"] = _safe_classify(snap, tier)
-    snap["regime"] = regime_step.detect(ticker, snap["_price_data"], tier=tier)
-    snap["volatility"] = vol_step.forecast(ticker, snap["_price_data"], tier=tier)
-    snap["targets"] = targets_step.derive(ticker, entry, snap)
+    # Trades: one row per (ticker, snapshot_date, horizon) that is old
+    # enough to evaluate. The same row carries the dip/rally check
+    # plus per-user target/stop checks.
+    all_trades: list[dict] = []
 
-    # MC needs a deterministic run_date — use the as_of for reproducibility.
-    snap["monte_carlo"] = mc_step.simulate(ticker, snap, run_date=as_of.isoformat())
-    if snap["monte_carlo"].get("status") == "ok":
-        snap["price_levels"] = snap["monte_carlo"].pop("price_levels", {"status": "pending"})
-        snap["daily_path"] = snap["monte_carlo"].pop("daily_path", {"status": "pending"})
-    else:
-        raise RuntimeError(f"monte_carlo failed: {snap['monte_carlo'].get('reason')}")
-
-    snap["analytic_verifier"] = av_step.verify(ticker, snap)
-    snap["fair_value"] = {"status": "pending", "reason": "skipped in backtest (current-only data)"}
-
-    # Verdict
-    snap["conviction"] = verdict_step.synthesize(ticker, snap, entry)
-    if snap["conviction"].get("status") != "ok":
-        raise RuntimeError(f"verdict failed: {snap['conviction'].get('reason')}")
-
-    # Future prices for realized outcomes
-    future_prices = _truncate_prices_after(full_price_data["prices"], as_of)
-
-    rows = []
-    for h in horizons:
-        user_block = (snap["conviction"]["horizons"].get(h) or {}).get("backtest")
-        if not user_block:
+    for ticker in price_data_by_ticker.keys():
+        prices = (price_data_by_ticker[ticker] or {}).get("prices") or []
+        if not prices:
             continue
-        breakdown = user_block["breakdown"]
-        targets = user_block["targets"]
-        user_mc = ((snap["monte_carlo"]["users"] or {}).get("backtest") or {}).get("horizons", {}).get(h)
-        if not user_mc:
-            continue
+        snaps_for_ticker = _load_ticker_snapshots(ticker)
+        for snap in snaps_for_ticker:
+            snap_date = snap.get("run_date")
+            if not snap_date:
+                continue
+            for h in horizons:
+                row = _evaluate_snapshot(snap, prices, horizon_days=h)
+                if row is not None:
+                    all_trades.append(row)
 
-        realized = _compute_realized_outcome(
-            future_prices=future_prices,
-            target_price=targets["target"],
-            stop_price=targets["stop"],
-            horizon_days=h,
-        )
-        if realized is None:
-            # Not enough future history for this horizon
-            continue
-
-        rows.append({
-            "ticker": ticker,
-            "as_of": as_of.isoformat(),
-            "horizon": h,
-            "current_price": snap["targets"]["current_price"],
-            "target_price": targets["target"],
-            "stop_price": targets["stop"],
-            # Predicted (engine output as-of)
-            "predicted_verdict": breakdown["verdict_label"],
-            "predicted_score": breakdown["final_score"],
-            "predicted_p_target": user_mc["p_target"],
-            "predicted_p_stop": user_mc["p_stop"],
-            "predicted_ev_pct": user_mc["ev_pct"],
-            "predicted_ev_normalized": user_mc["ev_normalized"],
-            # Realized
-            "realized_outcome": realized["outcome"],          # "target"|"stop"|"neither"
-            "realized_first_passage_day": realized["first_passage_day"],
-            "realized_terminal_pct": realized["terminal_pct"],
-            "realized_return_pct": realized["realized_return_pct"],
-        })
-
-    return rows
-
-
-# ---------- historical snapshot construction ----------
-
-
-def _build_historical_snapshot(
-    ticker: str,
-    as_of: date,
-    truncated_prices: list[dict],
-    full_profile: dict,
-    full_earnings: list[dict],
-    entry: dict,
-) -> dict:
-    """Construct a snap-like dict with truncated price data + historical
-    earnings + filtered reactions. Missing fields (news, analyst, FV)
-    are intentionally left empty/pending - graceful degradation
-    elsewhere handles them.
-
-    CRITICAL: `full_profile` from FMP contains the CURRENT market price
-    (today's quote). For an as-of=2025-06-01 backtest, that price is
-    wildly wrong - it's today's price, not 2025-06-01's close. We
-    override profile.price with the close of the last truncated bar
-    (the as-of close), which is what `targets.derive` reads as the
-    "current price" for vol-scaled band derivation.
-
-    Without this override, all backtest target/stop levels would be
-    anchored to today's NVDA price (~$225) regardless of which
-    historical date we're evaluating. The verdict would be computed
-    against levels that have no relationship to the as-of market state,
-    and the comparison to realized outcomes would be meaningless.
-    """
-    # Override profile.price with the as-of close (NOT today's quote).
-    historical_profile = dict(full_profile)
-    if truncated_prices:
-        last_close = (
-            truncated_prices[-1].get("adj_close")
-            or truncated_prices[-1].get("close")
-        )
-        if last_close:
-            historical_profile["price"] = float(last_close)
-
-    snap: dict = {
-        "ticker": ticker,
-        "run_date": as_of.isoformat(),
-        "tier_anchor": entry.get("tier"),
-        "as_of": truncated_prices[-1]["date"] if truncated_prices else None,
-        "data": {
-            "status": "ok",
-            "profile": historical_profile,
-            "sanity": {"overall": "ok"},
-            "bar_count": len(truncated_prices),
-        },
-        "_price_data": {
-            "ticker": ticker,
-            "as_of": truncated_prices[-1]["date"] if truncated_prices else None,
-            "profile": historical_profile,
-            "prices": truncated_prices,
-            "sanity": {"overall": "ok"},
-        },
-        "catalyst": _build_catalyst_block(
-            full_earnings, truncated_prices, as_of, ticker
-        ),
-    }
-    return snap
-
-
-def _build_catalyst_block(
-    full_earnings: list[dict],
-    truncated_prices: list[dict],
-    as_of: date,
-    ticker: str,
-) -> dict:
-    """Build a catalyst payload from full earnings history + truncated
-    prices, filtered to data available as-of `as_of`. No news, no
-    analyst data, no options-implied move - those are current-only
-    endpoints and treating them as historical would be data leakage.
-    """
-    if not full_earnings:
-        return {"status": "ok", "next_event": None, "distance_sessions": None,
-                "historical_reactions": [], "news_bullets": [],
-                "analyst_revisions": {}, "engine_recommendation": "",
-                "options_implied_move_pct": None,
-                "proximity_haircut": 0.0,
-                "in_horizon_30d": False, "in_horizon_60d": False}
-
-    as_of_iso = as_of.isoformat()
-
-    # Past earnings: dates before as_of — used for historical_reactions
-    past = [e for e in full_earnings if (e.get("date") or "")[:10] < as_of_iso]
-    # Future earnings: dates >= as_of — used for next_event
-    future = [e for e in full_earnings if (e.get("date") or "")[:10] >= as_of_iso]
-    future.sort(key=lambda e: (e.get("date") or ""))
-    next_event_date = future[0].get("date")[:10] if future else None
-
-    distance = _sessions_between(as_of, date.fromisoformat(next_event_date)) if next_event_date else None
-
-    # Historical reactions: close-to-close around each past earnings date.
-    historical_reactions = _compute_historical_reactions(past, truncated_prices, as_of)
-
-    proximity_haircut = 0.0
-    in_horizon_30d = False
-    in_horizon_60d = False
-    if distance is not None:
-        # Use the same proximity haircut bands as production
-        bands = config.THRESHOLDS.conviction.vetoes.catalyst.proximity_haircut_bands
-        for band in bands:
-            if distance <= band.max_sessions:
-                proximity_haircut = band.haircut
-                break
-        in_horizon_30d = distance <= config.THRESHOLDS.horizons.primary_days
-        in_horizon_60d = distance <= config.THRESHOLDS.horizons.secondary_days
+    metrics = _aggregate(all_trades, horizons)
+    if metrics["trades_evaluated"] == 0:
+        return {
+            "status": "insufficient_data",
+            "days_of_history": days_of_history,
+            "days_needed": MIN_HISTORY_TRADING_DAYS,
+            "summary": (
+                f"{days_of_history} days of snapshots on disk, but no "
+                f"snapshots are old enough yet for their horizons to "
+                f"have elapsed. The 30d hit-rate populates first, "
+                f"the 60d follows."
+            ),
+        }
 
     return {
         "status": "ok",
-        "ticker": ticker,
-        "as_of": as_of_iso,
-        "next_event": {"type": "earnings", "date": next_event_date} if next_event_date else None,
-        "distance_sessions": distance,
-        "historical_reactions": historical_reactions,
-        "options_implied_move_pct": None,    # current-only - skip
-        "news_bullets": [],                  # current-only - skip
-        "analyst_revisions": {},             # current-only - skip
-        "engine_recommendation": "",
-        "proximity_haircut": proximity_haircut,
-        "in_horizon_30d": in_horizon_30d,
-        "in_horizon_60d": in_horizon_60d,
-        "short_interest": None,              # current-only - skip
-        "price_target_consensus": None,      # current-only - skip
-        "errors": [],
-    }
-
-
-def _compute_historical_reactions(
-    past_earnings: list[dict], truncated_prices: list[dict], as_of: date
-) -> list[dict]:
-    """Reactions for past earnings that ALREADY HAPPENED before as_of,
-    using only prices up to as_of (no future leak). Matches the
-    production catalyst._historical_reactions algorithm."""
-    if not past_earnings or not truncated_prices:
-        return []
-    import bisect
-    price_by_date = {p["date"]: p for p in truncated_prices}
-    sorted_dates = sorted(price_by_date.keys())
-    as_of_iso = as_of.isoformat()
-
-    reactions: list[dict] = []
-    for e in past_earnings:
-        d_str = (e.get("date") or "")[:10]
-        if not d_str or d_str >= as_of_iso:
-            continue
-        # Find on-or-before and strictly-after
-        idx_before = bisect.bisect_right(sorted_dates, d_str) - 1
-        idx_after = bisect.bisect_right(sorted_dates, d_str)
-        if idx_before < 0 or idx_after >= len(sorted_dates):
-            continue
-        before_date = sorted_dates[idx_before]
-        after_date = sorted_dates[idx_after]
-        if after_date >= as_of_iso:
-            # Reaction happens after as_of - data leak; skip.
-            continue
-        close_before = price_by_date[before_date].get("close")
-        close_after = price_by_date[after_date].get("close")
-        if not close_before or not close_after:
-            continue
-        reaction_pct = (close_after - close_before) / close_before * 100
-        reactions.append({
-            "date": d_str, "type": "earnings",
-            "reaction_pct": round(reaction_pct, 2),
-        })
-
-    reactions.sort(key=lambda r: r["date"], reverse=True)
-    return reactions[:config.THRESHOLDS.dashboard.earnings_reactions_lookback]
-
-
-# ---------- realized outcome ----------
-
-
-def _compute_realized_outcome(
-    future_prices: list[dict],
-    target_price: float,
-    stop_price: float,
-    horizon_days: int,
-) -> dict | None:
-    """Determine first-passage outcome from actual subsequent prices.
-
-    INTRADAY first-passage using daily HIGH/LOW bars. A Trading 212
-    stop-loss order triggers INTRADAY the moment price touches the
-    stop, not at the daily close. Similarly a take-profit limit fills
-    intraday when price touches the target. Using daily closes
-    UNDERCOUNTS hits the same way MC's close-only logic did before
-    the Brownian bridge correction - and we have the high/low data
-    right there in the FMP bars, we just need to use it.
-
-    Algorithm per day:
-      - if high >= target_price -> target was touched intraday
-      - if low <= stop_price -> stop was touched intraday
-      - both could happen same day (e.g. earnings gap up then sell-off);
-        we mark as "both" outcome, the trader's actual P&L depends on
-        which limit order filled first which we can't tell from daily
-        OHLC. Use midpoint as the realized return estimate.
-      - falls back to close-based detection if high/low missing
-        (some thinly-traded names, holidays).
-
-    Returns None if there are fewer than `horizon_days` future prices
-    available (can't evaluate the trade).
-    """
-    if len(future_prices) < horizon_days:
-        return None
-    window = future_prices[:horizon_days]
-
-    target_first_day = None
-    stop_first_day = None
-    for i, p in enumerate(window, start=1):
-        # Prefer intraday extrema; fall back to close when missing.
-        high = p.get("high")
-        low = p.get("low")
-        close = p.get("adj_close") or p.get("close")
-        if high is None and low is None and close is None:
-            continue
-        # Intraday high reaches target -> stop-loss order would have
-        # filled at the target price (good outcome for the trader).
-        check_high = high if high is not None else close
-        check_low = low if low is not None else close
-        if check_high is not None and check_high >= target_price and target_first_day is None:
-            target_first_day = i
-        if check_low is not None and check_low <= stop_price and stop_first_day is None:
-            stop_first_day = i
-        if target_first_day is not None and stop_first_day is not None:
-            break
-
-    if target_first_day is None and stop_first_day is None:
-        outcome = "neither"
-        first_passage_day = horizon_days
-    elif target_first_day is not None and (stop_first_day is None or target_first_day < stop_first_day):
-        outcome = "target"
-        first_passage_day = target_first_day
-    elif stop_first_day is not None and (target_first_day is None or stop_first_day < target_first_day):
-        outcome = "stop"
-        first_passage_day = stop_first_day
-    else:
-        # Same-day touch (rare with daily resolution; resolve to "both")
-        outcome = "both"
-        first_passage_day = target_first_day
-
-    terminal_close = window[-1].get("adj_close") or window[-1].get("close")
-    open_close = future_prices[0].get("adj_close") or future_prices[0].get("close")
-    # Realized return: at the price the trader would have transacted at
-    # given the first-passage outcome (target or stop price if hit, else
-    # terminal close). Compared to the "current price" at as_of (which
-    # is the last bar BEFORE as_of in the truncated price series).
-    return {
-        "outcome": outcome,
-        "first_passage_day": first_passage_day,
-        "terminal_pct": (terminal_close - open_close) / open_close * 100 if open_close else 0.0,
-        "realized_return_pct": _outcome_return_pct(
-            outcome, target_price, stop_price, terminal_close, open_close
+        "days_of_history": days_of_history,
+        "trades_evaluated": metrics["trades_evaluated"],
+        "by_horizon": metrics["by_horizon"],
+        "summary": (
+            f"Predictions scored from {days_of_history} nights of "
+            f"accumulated snapshots. Each (ticker, horizon) pair is "
+            f"evaluated once the horizon's trading-day window has elapsed; "
+            f"intraday highs and lows determine whether the predicted "
+            f"rally and dip levels were touched."
         ),
     }
 
 
-def _outcome_return_pct(
-    outcome: str, target: float, stop: float, terminal: float, anchor: float
-) -> float:
-    """Return realized return based on outcome (what the trader would have
-    actually realized in P&L)."""
-    if not anchor:
-        return 0.0
-    if outcome == "target":
-        return (target - anchor) / anchor * 100
-    if outcome == "stop":
-        return (stop - anchor) / anchor * 100
-    if outcome == "both":
-        return ((target + stop) / 2 - anchor) / anchor * 100
-    return (terminal - anchor) / anchor * 100 if terminal else 0.0
+# ---------- per-snapshot evaluation ----------
+
+
+def _evaluate_snapshot(snap: dict, all_prices: list[dict], horizon_days: int) -> dict | None:
+    """Score one (ticker, snapshot, horizon). Returns None if the
+    snapshot isn't yet old enough to evaluate (not enough future bars)."""
+    snap_date = snap.get("run_date")
+    if not snap_date:
+        return None
+
+    # Future bars: bars STRICTLY AFTER snap_date. The snapshot was made
+    # using snap_date's closing data, so the testable window starts the
+    # very next trading day.
+    future_bars = [b for b in all_prices if (b.get("date") or "") > snap_date]
+    needed = _required_future_bars(horizon_days)
+    if len(future_bars) < needed:
+        # Horizon hasn't elapsed yet — wait for more bars.
+        return None
+    window = future_bars[:needed]
+
+    price_levels = (snap.get("price_levels") or {}).get("horizons") or {}
+    # JSON keys are strings — try both forms.
+    horizon_block = price_levels.get(horizon_days) or price_levels.get(str(horizon_days))
+    if not horizon_block:
+        return None
+
+    dip_price = (horizon_block.get("dip") or {}).get("price")
+    rally_price = (horizon_block.get("rally") or {}).get("price")
+
+    # Dip hit: did the daily LOW ever touch the predicted dip level?
+    # Rally hit: did the daily HIGH ever touch the predicted rally level?
+    dip_hit = _touched_below(window, dip_price) if dip_price else None
+    rally_hit = _touched_above(window, rally_price) if rally_price else None
+
+    # Per-user verdicts + target/stop hits.
+    users_out: dict[str, dict] = {}
+    conviction_horizons = (snap.get("conviction") or {}).get("horizons") or {}
+    user_block_map = conviction_horizons.get(horizon_days) or conviction_horizons.get(str(horizon_days)) or {}
+    for user_name, user_block in user_block_map.items():
+        targets = user_block.get("targets") or {}
+        breakdown = user_block.get("breakdown") or {}
+        target_price = targets.get("target")
+        stop_price = targets.get("stop")
+        if not target_price or not stop_price:
+            continue
+        first_passage = _first_passage(window, target_price=target_price, stop_price=stop_price)
+        users_out[user_name] = {
+            "verdict_label": breakdown.get("verdict_label", "—"),
+            "target_price": target_price,
+            "stop_price": stop_price,
+            "target_hit": first_passage["target_hit"],
+            "stop_hit": first_passage["stop_hit"],
+            "first_passage": first_passage["outcome"],
+            "first_passage_day": first_passage["first_passage_day"],
+        }
+
+    return {
+        "ticker": snap.get("ticker"),
+        "snapshot_date": snap_date,
+        "horizon_days": horizon_days,
+        "current_price": (snap.get("targets") or {}).get("current_price"),
+        "predicted_dip_price": dip_price,
+        "predicted_rally_price": rally_price,
+        "dip_hit": dip_hit,
+        "rally_hit": rally_hit,
+        "actual_low": _window_min_low(window),
+        "actual_high": _window_max_high(window),
+        "users": users_out,
+    }
+
+
+def _touched_below(window: list[dict], price: float) -> bool:
+    """True if any daily low (or close if low missing) touched or
+    fell below `price` in the window."""
+    for b in window:
+        low = b.get("low")
+        if low is None:
+            low = b.get("adj_close") or b.get("close")
+        if low is not None and low <= price:
+            return True
+    return False
+
+
+def _touched_above(window: list[dict], price: float) -> bool:
+    """True if any daily high (or close if high missing) touched or
+    exceeded `price` in the window."""
+    for b in window:
+        high = b.get("high")
+        if high is None:
+            high = b.get("adj_close") or b.get("close")
+        if high is not None and high >= price:
+            return True
+    return False
+
+
+def _first_passage(window: list[dict], target_price: float, stop_price: float) -> dict:
+    """Determine which of target / stop was touched first, intraday.
+
+    Returns {outcome: 'target'|'stop'|'both'|'neither', target_hit, stop_hit,
+    first_passage_day}.
+    'both' = same trading session touched both — daily OHLC can't tell
+    us which limit order would have filled first; the trader's realized
+    P&L depends on intraday sequence we don't observe.
+    """
+    target_day = None
+    stop_day = None
+    for i, b in enumerate(window, start=1):
+        high = b.get("high") or b.get("adj_close") or b.get("close")
+        low = b.get("low") or b.get("adj_close") or b.get("close")
+        if high is not None and high >= target_price and target_day is None:
+            target_day = i
+        if low is not None and low <= stop_price and stop_day is None:
+            stop_day = i
+        if target_day is not None and stop_day is not None:
+            break
+
+    target_hit = target_day is not None
+    stop_hit = stop_day is not None
+    if not target_hit and not stop_hit:
+        outcome = "neither"
+        fp_day = len(window)
+    elif target_hit and not stop_hit:
+        outcome = "target"
+        fp_day = target_day
+    elif stop_hit and not target_hit:
+        outcome = "stop"
+        fp_day = stop_day
+    elif target_day < stop_day:
+        outcome = "target"
+        fp_day = target_day
+    elif stop_day < target_day:
+        outcome = "stop"
+        fp_day = stop_day
+    else:
+        outcome = "both"
+        fp_day = target_day
+    return {
+        "outcome": outcome,
+        "target_hit": target_hit,
+        "stop_hit": stop_hit,
+        "first_passage_day": fp_day,
+    }
+
+
+def _window_min_low(window: list[dict]) -> float | None:
+    lows = [b.get("low") for b in window if b.get("low") is not None]
+    return min(lows) if lows else None
+
+
+def _window_max_high(window: list[dict]) -> float | None:
+    highs = [b.get("high") for b in window if b.get("high") is not None]
+    return max(highs) if highs else None
 
 
 # ---------- aggregation ----------
 
 
-def _aggregate_metrics(trades: list[dict]) -> dict:
-    """Per-verdict hit rate + mean realized return + calibration."""
+def _aggregate(trades: list[dict], horizons: tuple[int, ...]) -> dict:
     if not trades:
-        return {"trades_evaluated": 0}
+        return {"trades_evaluated": 0, "by_horizon": {}}
 
-    by_verdict: dict[str, list[dict]] = defaultdict(list)
-    for t in trades:
-        by_verdict[t["predicted_verdict"]].append(t)
+    by_horizon: dict[int, dict] = {}
+    for h in horizons:
+        rows = [t for t in trades if t["horizon_days"] == h]
+        if not rows:
+            by_horizon[h] = {
+                "n": 0,
+                "dip_hit_rate": None,
+                "rally_hit_rate": None,
+                "target_hit_rate": None,
+                "stop_hit_rate": None,
+                "by_verdict": {},
+            }
+            continue
 
-    per_verdict_stats = {}
-    for verdict_label, rows in by_verdict.items():
-        n = len(rows)
-        target_hits = sum(1 for r in rows if r["realized_outcome"] == "target")
-        stop_hits = sum(1 for r in rows if r["realized_outcome"] == "stop")
-        neither = sum(1 for r in rows if r["realized_outcome"] == "neither")
-        mean_realized = float(np.mean([r["realized_return_pct"] for r in rows]))
-        mean_predicted_ev = float(np.mean([r["predicted_ev_pct"] for r in rows]))
-        mean_predicted_p_target = float(np.mean([r["predicted_p_target"] for r in rows]))
-        realized_hit_rate = target_hits / n if n else 0.0
-        per_verdict_stats[verdict_label] = {
-            "n": n,
-            "target_hit_count": target_hits,
-            "stop_hit_count": stop_hits,
-            "neither_count": neither,
-            "realized_target_hit_rate": realized_hit_rate,
-            "realized_stop_hit_rate": stop_hits / n if n else 0.0,
-            "mean_realized_return_pct": mean_realized,
-            "mean_predicted_ev_pct": mean_predicted_ev,
-            "mean_predicted_p_target": mean_predicted_p_target,
-            "ev_calibration_delta_pct": mean_realized - mean_predicted_ev,
-            "p_target_calibration_delta_pp": (realized_hit_rate - mean_predicted_p_target) * 100,
+        dip_rows = [r for r in rows if r["dip_hit"] is not None]
+        rally_rows = [r for r in rows if r["rally_hit"] is not None]
+        dip_hit_rate = (sum(1 for r in dip_rows if r["dip_hit"]) / len(dip_rows)) if dip_rows else None
+        rally_hit_rate = (sum(1 for r in rally_rows if r["rally_hit"]) / len(rally_rows)) if rally_rows else None
+
+        # Per-(verdict, horizon) target/stop hit rates. Sum users
+        # across all rows (target/stop is per-user).
+        verdict_buckets: dict[str, dict] = defaultdict(lambda: {
+            "n": 0, "target_hits": 0, "stop_hits": 0,
+            "first_passage": {"target": 0, "stop": 0, "both": 0, "neither": 0},
+        })
+        target_hits_total = 0
+        stop_hits_total = 0
+        target_total = 0
+        for r in rows:
+            for user_name, ub in (r.get("users") or {}).items():
+                label = ub.get("verdict_label", "—")
+                bucket = verdict_buckets[label]
+                bucket["n"] += 1
+                target_total += 1
+                if ub.get("target_hit"):
+                    bucket["target_hits"] += 1
+                    target_hits_total += 1
+                if ub.get("stop_hit"):
+                    bucket["stop_hits"] += 1
+                    stop_hits_total += 1
+                fp = ub.get("first_passage", "neither")
+                bucket["first_passage"][fp] = bucket["first_passage"].get(fp, 0) + 1
+
+        by_verdict_out = {}
+        for label, b in verdict_buckets.items():
+            n = b["n"]
+            by_verdict_out[label] = {
+                "n": n,
+                "target_hit_rate": b["target_hits"] / n if n else 0.0,
+                "stop_hit_rate": b["stop_hits"] / n if n else 0.0,
+                "first_passage_target_pct": b["first_passage"]["target"] / n if n else 0.0,
+                "first_passage_stop_pct": b["first_passage"]["stop"] / n if n else 0.0,
+                "first_passage_neither_pct": b["first_passage"]["neither"] / n if n else 0.0,
+            }
+
+        by_horizon[h] = {
+            "n": len(rows),
+            "n_user_evaluations": target_total,
+            "dip_hit_rate": dip_hit_rate,
+            "rally_hit_rate": rally_hit_rate,
+            "target_hit_rate": (target_hits_total / target_total) if target_total else None,
+            "stop_hit_rate": (stop_hits_total / target_total) if target_total else None,
+            "by_verdict": by_verdict_out,
         }
-
-    # Calibration: bucket all trades by predicted P(target) decile,
-    # compare to realized hit rate per bucket. If the engine's
-    # probabilities are well-calibrated, the realized hit rate in
-    # the 30-40% bucket should be roughly 30-40%.
-    calibration_buckets = _build_calibration_buckets(trades)
 
     return {
         "trades_evaluated": len(trades),
-        "by_verdict": per_verdict_stats,
-        "p_target_calibration": calibration_buckets,
+        "by_horizon": by_horizon,
     }
 
 
-def _build_calibration_buckets(trades: list[dict]) -> list[dict]:
-    """Decile buckets of predicted P(target) with realized hit rate."""
-    buckets = [{"low": d / 10, "high": (d + 1) / 10, "rows": []} for d in range(10)]
-    for t in trades:
-        p = t["predicted_p_target"]
-        idx = min(int(p * 10), 9)
-        buckets[idx]["rows"].append(t)
-    out = []
-    for b in buckets:
-        rows = b["rows"]
-        if not rows:
-            out.append({
-                "predicted_p_target_low": b["low"],
-                "predicted_p_target_high": b["high"],
-                "n": 0,
-                "realized_hit_rate": None,
-                "mean_predicted_p_target": None,
-            })
-        else:
-            hits = sum(1 for r in rows if r["realized_outcome"] == "target")
-            out.append({
-                "predicted_p_target_low": b["low"],
-                "predicted_p_target_high": b["high"],
-                "n": len(rows),
-                "realized_hit_rate": hits / len(rows),
-                "mean_predicted_p_target": float(np.mean([r["predicted_p_target"] for r in rows])),
-            })
-    return out
+# ---------- snapshot discovery ----------
 
 
-# ---------- helpers ----------
-
-
-def _truncate_prices(prices: list[dict], as_of: date) -> list[dict]:
-    """Keep only prices STRICTLY BEFORE as_of (no future leak).
-    The most recent kept price is the "current price" at as_of."""
-    as_of_iso = as_of.isoformat()
-    return [p for p in prices if (p.get("date") or "") < as_of_iso]
-
-
-def _truncate_prices_after(prices: list[dict], as_of: date) -> list[dict]:
-    """Prices ON or AFTER as_of (for realized-outcome simulation)."""
-    as_of_iso = as_of.isoformat()
-    return [p for p in prices if (p.get("date") or "") >= as_of_iso]
-
-
-def _sessions_between(start: date, end: date) -> int:
-    """Approximate trading sessions between two dates. For backtest
-    purposes a calendar-day-based approximation is fine."""
-    if end <= start:
-        return 0
-    delta_days = (end - start).days
-    # ~5/7 of calendar days are trading days
-    return int(delta_days * 5.0 / 7.0)
-
-
-def _generate_sample_dates(
-    full_price_data: dict, start: date, end: date, every: int
-) -> list[date]:
-    """Generate sample dates at `every` calendar-day intervals, only
-    keeping dates that are actual trading days (i.e., dates present
-    in the price series)."""
-    prices = full_price_data.get("prices") or []
-    date_set = {p["date"] for p in prices}
-    out: list[date] = []
-    cursor = start
-    while cursor <= end:
-        if cursor.isoformat() in date_set:
-            out.append(cursor)
-        cursor += timedelta(days=every)
-    return out
-
-
-def _safe_classify(snap: dict, tier: str | None) -> dict:
-    try:
-        cls = tier_classifier.classify(snap["_price_data"])
-        cls["status"] = "ok"
-        return cls
-    except Exception as e:  # noqa: BLE001
-        return {"status": "fail", "reason": str(e),
-                "measured_tier": tier or "B",
-                "properties": {"adv_usd": {"value": 1e9}}}
-
-
-def _fetch_full_earnings_history(ticker: str) -> list[dict]:
-    """Pull every earnings event for this ticker from FMP /earnings.
-    Returns empty list on failure (catalyst block falls back gracefully).
+def _accumulated_snapshot_dates() -> list[str]:
+    """Union of all snapshot dates across all tickers on disk. The size
+    of this set is "days of accumulated history" for the cold-start gate.
     """
-    try:
-        from src.data_sources import fmp
-        body = fmp.get("earnings", ticker)
-        if isinstance(body, list):
-            return body
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"{ticker}: full earnings fetch failed: {e}")
-    return []
-
-
-def _load_watchlist() -> dict:
-    if not config.WATCHLIST_PATH.exists():
-        return {}
-    with config.WATCHLIST_PATH.open() as f:
-        return yaml.safe_load(f) or {}
-
-
-# ---------- CLI ----------
-
-
-def _print_summary(payload: dict) -> None:
-    cfg = payload["run_config"]
-    summary = payload["summary"]
-    metrics = payload["metrics"]
-    print()
-    print(f"=== Backtest run ===")
-    print(f"  Tickers:        {', '.join(cfg['tickers'])}")
-    print(f"  Window:         {cfg['as_of_start']} to {cfg['as_of_end']}, every {cfg['sample_every_days']}d")
-    print(f"  Horizons:       {cfg['horizons']}")
-    print(f"  Trades:         {summary['trades_evaluated']} evaluated, {summary['skipped']} skipped")
-    if summary["trades_evaluated"] == 0:
-        return
-
-    print()
-    print("=== Per-verdict performance ===")
-    for verdict_label, stats in (metrics.get("by_verdict") or {}).items():
-        print(f"\n  {verdict_label}: n={stats['n']}")
-        print(f"    Target hit:     {stats['target_hit_count']}/{stats['n']} = {stats['realized_target_hit_rate']*100:.1f}%")
-        print(f"    Stop hit:       {stats['stop_hit_count']}/{stats['n']} = {stats['realized_stop_hit_rate']*100:.1f}%")
-        print(f"    Mean realized:  {stats['mean_realized_return_pct']:+.2f}%")
-        print(f"    Mean predicted EV: {stats['mean_predicted_ev_pct']:+.2f}%")
-        print(f"    EV calibration: {stats['ev_calibration_delta_pct']:+.2f}% (realized vs predicted)")
-        print(f"    P(target) calibration: {stats['p_target_calibration_delta_pp']:+.1f}pp (realized hit rate vs mean predicted)")
-
-    print()
-    print("=== P(target) calibration buckets ===")
-    print(f"  {'Predicted band':<22} {'n':<6} {'Mean predicted':<16} {'Realized hit rate':<18}")
-    for b in metrics.get("p_target_calibration", []):
-        if b["n"] == 0:
+    root = config.SNAPSHOTS_DIR
+    if not root.exists():
+        return []
+    seen: set[str] = set()
+    for ticker_dir in root.iterdir():
+        if not ticker_dir.is_dir():
             continue
-        band = f"{b['predicted_p_target_low']*100:.0f}-{b['predicted_p_target_high']*100:.0f}%"
-        print(
-            f"  {band:<22} {b['n']:<6} {b['mean_predicted_p_target']*100:>6.1f}%          "
-            f"{b['realized_hit_rate']*100:>6.1f}%"
-        )
+        for p in ticker_dir.glob("*.json"):
+            seen.add(p.stem)
+    return sorted(seen)
 
 
-def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
-
-    parser = argparse.ArgumentParser(description="Walk-forward backtest.")
-    parser.add_argument("--tickers", nargs="+", default=None, help="ticker(s); defaults to watchlist")
-    parser.add_argument("--from", dest="from_date", default=None, help="start as-of date YYYY-MM-DD")
-    parser.add_argument("--to", dest="to_date", default=None, help="end as-of date YYYY-MM-DD")
-    parser.add_argument("--every", type=int, default=7, help="sample every N calendar days (default 7)")
-    parser.add_argument("--as-of", default=None, help="single as-of date (dry run on one date)")
-    parser.add_argument("--out", default=None, help="output JSON path (default data/backtest/{run-date}.json)")
-    args = parser.parse_args()
-
-    tickers = args.tickers or list(_load_watchlist().keys())
-    if not tickers:
-        print("ERROR: no tickers given and watchlist empty", file=sys.stderr)
-        return 1
-
-    if args.as_of:
-        single = date.fromisoformat(args.as_of)
-        as_of_start = single
-        as_of_end = single
-    else:
-        # Defaults: from 1 year ago, to 90 days ago (so 60d horizon has realized outcomes)
-        today = date.today()
-        as_of_end = date.fromisoformat(args.to_date) if args.to_date else today - timedelta(days=90)
-        as_of_start = date.fromisoformat(args.from_date) if args.from_date else today - timedelta(days=365)
-
-    payload = run(
-        tickers=tickers,
-        as_of_start=as_of_start,
-        as_of_end=as_of_end,
-        sample_every_days=args.every,
-    )
-
-    # Write to disk
-    out_path = Path(args.out) if args.out else (
-        config.BACKTEST_DIR / f"{date.today().isoformat()}.json"
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w") as f:
-        json.dump(payload, f, indent=2, default=str)
-    print(f"\nWrote {out_path} ({len(payload['trades'])} trades)")
-
-    _print_summary(payload)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+def _load_ticker_snapshots(ticker: str) -> list[dict]:
+    """Load all snapshots on disk for a ticker, oldest first."""
+    ticker_dir = config.SNAPSHOTS_DIR / ticker
+    if not ticker_dir.exists():
+        return []
+    out: list[dict] = []
+    for p in sorted(ticker_dir.glob("*.json")):
+        try:
+            with p.open() as f:
+                out.append(json.load(f))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"failed to read snapshot {p}: {e}")
+    return out

@@ -187,6 +187,36 @@ details.info-block > summary::before { content: "▸ "; color: var(--muted); }
 details.info-block[open] > summary::before { content: "▾ "; }
 details.info-block > .body { padding: 0 16px 16px; font-size: 13px; color: var(--text-soft); }
 
+/* ---------- backtest panel ---------- */
+.bt-horizon { margin: 14px 0 18px; }
+.bt-horizon:first-of-type { margin-top: 4px; }
+.bt-horizon h4 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 0 0 10px; }
+.bt-mc-row { display: flex; gap: 24px; flex-wrap: wrap; margin: 0 0 10px; }
+.bt-mc-cell { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
+.bt-mc-label { font-size: 12px; color: var(--text-soft); }
+.bt-mc-value { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-weight: 600; font-size: 16px; color: var(--text); }
+.bt-table { width: 100%; border-collapse: collapse; margin: 4px 0 0; font-size: 12.5px; }
+.bt-table th, .bt-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.bt-table th { font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+.bt-table td.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+
+/* ---------- deployment horizon collapse ---------- */
+details.deployment-horizon { margin: 0; padding: 0; border: 0; }
+details.deployment-horizon > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 0 6px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+details.deployment-horizon > summary::-webkit-details-marker { display: none; }
+details.deployment-horizon > summary::before { content: "▸"; color: var(--muted); font-size: 10px; }
+details.deployment-horizon[open] > summary::before { content: "▾"; }
+details.deployment-horizon > summary:hover { color: var(--accent); }
+details.deployment-horizon > summary .h-count { color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 12px; }
+
 /* ---------- deployment summary ---------- */
 .deployment {
   background: var(--panel);
@@ -919,23 +949,136 @@ def _render_data_quality(payload: dict) -> str:
 
 
 def _render_backtest(payload: dict) -> str:
+    """Backtest panel — checks whether the engine's past predictions
+    actually came true. Two halves per horizon: did the predicted dip
+    and rally levels get touched (intraday HIGH/LOW), and did the
+    per-user target/stop bands behave as classified by the verdict.
+
+    Shapes consumed:
+      - {"status": "insufficient_data", days_of_history, days_needed, summary}
+      - {"status": "ok", days_of_history, trades_evaluated, by_horizon, summary}
+      - {"status": "fail", reason}
+    """
     backtest = payload.get("backtest")
-    if backtest is None or backtest.get("status") == "pending":
-        # Pending until the first weekly run from .github/workflows/backtest.yml
-        # writes data/backtest/{date}.json. Main.py's _load_latest_backtest_summary
-        # adapts that file into the small {hit_rate_pct, hits, total, summary}
-        # shape this panel consumes.
-        return """
+    if not backtest:
+        return ""
+
+    status = backtest.get("status")
+    if status == "fail":
+        reason = html.escape(backtest.get("reason", "unknown"))
+        return f"""
 <details class='info-block'>
-  <summary>Backtest — <span class='pill pill-pending'>pending first weekly run</span></summary>
-  <div class='body'>Populates after the first weekly backtest run (Saturdays 08:00 UTC). The walk-forward harness replays the engine across ~52 historical as-of dates per ticker and reports per-verdict hit rate, EV calibration delta, and P(target) calibration buckets. Trigger a one-off via the Actions tab → "SGC Swing Trader weekly backtest" → Run workflow if you want it sooner.</div>
+  <summary>Backtest — <span class='pill pill-pending'>error</span></summary>
+  <div class='body'>The backtest scorer raised: <code>{reason}</code>. Snapshots keep accumulating regardless; the panel resumes once the issue is fixed.</div>
 </details>
 """
-    # Live render — main.py shaped this with hit_rate_pct, hits, total, summary.
+
+    if status == "insufficient_data":
+        days = backtest.get("days_of_history", 0)
+        needed = backtest.get("days_needed", 14)
+        summary = html.escape(backtest.get("summary", ""))
+        return f"""
+<details class='info-block'>
+  <summary>Backtest — <span class='pill pill-pending'>cold start: {days}/{needed} night(s)</span></summary>
+  <div class='body'>
+    {summary}
+    <div style='margin-top:8px; color: var(--muted);'>Each nightly snapshot adds one row of predictions to the on-disk archive. A prediction becomes scorable once its horizon (30 or 60 trading days) has elapsed — the 30-day hit rates appear first, the 60-day follow.</div>
+  </div>
+</details>
+"""
+
+    by_horizon = backtest.get("by_horizon") or {}
+    days_of_history = backtest.get("days_of_history", 0)
+    trades = backtest.get("trades_evaluated", 0)
+
+    def _pct(v):
+        if v is None:
+            return "—"
+        return f"{v*100:.0f}%"
+
+    horizon_blocks: list[str] = []
+    for h_key in sorted(by_horizon.keys(), key=lambda x: int(x)):
+        block = by_horizon[h_key]
+        h = int(h_key)
+        n = block.get("n", 0)
+        if n == 0:
+            horizon_blocks.append(
+                f"<div class='bt-horizon'><h4>{h}-day horizon</h4>"
+                f"<div style='color: var(--muted); font-size: 12.5px;'>"
+                f"No snapshots have aged out of the {h}-day window yet — waiting for older predictions to become testable.</div></div>"
+            )
+            continue
+
+        verdict_rows: list[str] = []
+        by_verdict = block.get("by_verdict") or {}
+        for label in ("ENTER", "WAIT", "HOLD", "TRIM", "SKIP", "EXIT", "—"):
+            vb = by_verdict.get(label)
+            if not vb or vb.get("n", 0) == 0:
+                continue
+            verdict_rows.append(
+                f"<tr>"
+                f"<td><span class='verdict verdict-{html.escape(label)}'>{html.escape(label)}</span></td>"
+                f"<td class='mono'>{vb['n']}</td>"
+                f"<td class='mono'>{_pct(vb.get('target_hit_rate'))}</td>"
+                f"<td class='mono'>{_pct(vb.get('stop_hit_rate'))}</td>"
+                f"<td class='mono'>{_pct(vb.get('first_passage_target_pct'))}</td>"
+                f"<td class='mono'>{_pct(vb.get('first_passage_stop_pct'))}</td>"
+                f"<td class='mono'>{_pct(vb.get('first_passage_neither_pct'))}</td>"
+                f"</tr>"
+            )
+        if verdict_rows:
+            verdict_table = (
+                "<table class='bt-table'>"
+                "<thead><tr>"
+                "<th>Verdict</th><th>n</th>"
+                "<th title='Did the daily HIGH ever touch the predicted target within the horizon?'>Target hit</th>"
+                "<th title='Did the daily LOW ever touch the predicted stop within the horizon?'>Stop hit</th>"
+                "<th title='Of all trades for this verdict, what share saw the target touched BEFORE the stop?'>Target first</th>"
+                "<th title='Of all trades for this verdict, what share saw the stop touched BEFORE the target?'>Stop first</th>"
+                "<th title='Of all trades for this verdict, what share saw neither level touched inside the horizon?'>Neither</th>"
+                "</tr></thead><tbody>"
+                f"{''.join(verdict_rows)}"
+                "</tbody></table>"
+            )
+        else:
+            verdict_table = "<div style='color: var(--muted); font-size: 12.5px;'>No verdict-classified trades for this horizon yet.</div>"
+
+        rally_rate = _pct(block.get("rally_hit_rate"))
+        dip_rate = _pct(block.get("dip_hit_rate"))
+
+        horizon_blocks.append(f"""
+<div class='bt-horizon'>
+  <h4>{h}-day horizon — {n} prediction(s) evaluated</h4>
+  <div class='bt-mc-row'>
+    <div class='bt-mc-cell'>
+      <div class='bt-mc-label' title="Did the daily HIGH within the horizon touch the engine's predicted rally level (Monte-Carlo median upside)?">Rally actually happened</div>
+      <div class='bt-mc-value'>{rally_rate}</div>
+    </div>
+    <div class='bt-mc-cell'>
+      <div class='bt-mc-label' title="Did the daily LOW within the horizon touch the engine's predicted dip level (Monte-Carlo median downside)?">Dip actually happened</div>
+      <div class='bt-mc-value'>{dip_rate}</div>
+    </div>
+  </div>
+  {verdict_table}
+</div>
+""")
+
+    summary = html.escape(backtest.get("summary", ""))
+    body_blocks = "".join(horizon_blocks) or "<div style='color: var(--muted);'>No horizons populated yet.</div>"
+
     return f"""
 <details class='info-block' open>
-  <summary>Backtest — hit rate {backtest['hit_rate_pct']:.0f}% ({backtest['hits']}/{backtest['total']})</summary>
-  <div class='body'>{html.escape(backtest.get('summary', ''))}</div>
+  <summary>Backtest — {trades} prediction(s) scored from {days_of_history} night(s) of history</summary>
+  <div class='body'>
+    <div style='margin-bottom: 10px; color: var(--text-soft); line-height: 1.5;'>{summary}</div>
+    {body_blocks}
+    <div style='margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); line-height: 1.55;'>
+      <strong>How this is computed.</strong>
+      Every nightly snapshot writes the engine's predictions for each horizon — a predicted dip level (the most likely low), a predicted rally level (the most likely high), and per-user target / stop bands.
+      Once a horizon's trading-day window has elapsed, this panel compares those predictions to what actually happened — using <em>intraday highs and lows</em> (a stop-loss order in Trading 212 fires the moment price touches the level, not at the daily close).
+      "Target first / Stop first / Neither" partitions trades by which level got touched first; the three columns sum to 100% for each verdict row.
+    </div>
+  </div>
 </details>
 """
 
@@ -967,14 +1110,14 @@ def _render_deployment(payload: dict) -> str:
 
     label_order = ("ENTER", "HOLD", "WAIT", "TRIM", "SKIP", "EXIT", "—")
     horizon_order = sorted(set(h for (_, h) in grouped.keys()))
+    primary_horizon = config.THRESHOLDS.horizons.primary_days
 
-    rows: list[str] = []
-    for horizon_days in horizon_order:
+    def _build_rows(horizon_days: int) -> list[str]:
+        out: list[str] = []
         for label in label_order:
             entries = grouped.get((label, horizon_days))
             if not entries:
                 continue
-            ticker_chunks = []
             # Within each verdict-horizon group, order tickers by 30d
             # rally upside (biggest gain potential first) so the most
             # actionable names lead the row. Mirrors the per-ticker-card
@@ -983,12 +1126,11 @@ def _render_deployment(payload: dict) -> str:
                 entries.keys(),
                 key=lambda t: -_rally_pct_30d(tickers.get(t) or {}),
             )
+            ticker_chunks = []
             for ticker in sorted_entry_tickers:
                 users = entries[ticker]
                 holders = (watchlist.get(ticker) or {}).get("holders") or {}
                 all_tracking = [u for u in config.USERS if u in holders]
-                # If every tracking user has this same (label, horizon),
-                # don't qualify — applies to both.
                 if set(users) == set(all_tracking):
                     user_qual = ""
                 else:
@@ -997,25 +1139,54 @@ def _render_deployment(payload: dict) -> str:
                     f"<a class='ticker-jump mono' href='#ticker-{html.escape(ticker)}'>"
                     f"{html.escape(ticker)}</a>{user_qual}"
                 )
-
-            rows.append(
+            out.append(
                 f"<div class='row'>"
                 f"<span class='label'><span class='verdict verdict-{html.escape(label)}'>{html.escape(label)} {horizon_days}d</span></span>"
                 f"<span class='count'>({len(entries)})</span>"
                 f"<span class='ticker-list'>{' · '.join(ticker_chunks)}</span>"
                 f"</div>"
             )
+        return out
 
-    if not rows:
-        rows.append("<div class='row'><span class='label'>—</span><span class='count'>No actionable verdicts this run.</span></div>")
+    sections: list[str] = []
+    # Render the primary (30d) horizon flat — that's the swing trader's
+    # core read. Render every other horizon (60d today, more later)
+    # inside a collapsed-by-default `<details>` so the panel stays scannable
+    # on the typical morning glance. The longer horizon is a confirmation
+    # frame, not the headline.
+    primary_rows = _build_rows(primary_horizon) if primary_horizon in horizon_order else []
+    sections.extend(primary_rows)
+
+    secondary_horizons = [h for h in horizon_order if h != primary_horizon]
+    for horizon_days in secondary_horizons:
+        rows = _build_rows(horizon_days)
+        if not rows:
+            continue
+        # Distinct tickers behind the toggle — simple count, no jargon.
+        distinct_tickers = set()
+        for (_, h), entries in grouped.items():
+            if h == horizon_days:
+                distinct_tickers.update(entries.keys())
+        n_tickers = len(distinct_tickers)
+        sections.append(
+            f"<details class='deployment-horizon'>"
+            f"<summary>{horizon_days}-day horizon "
+            f"<span class='h-count'>(verdicts for {n_tickers} ticker{'s' if n_tickers != 1 else ''} — click to expand)</span>"
+            f"</summary>"
+            f"{''.join(rows)}"
+            f"</details>"
+        )
+
+    if not sections:
+        sections.append("<div class='row'><span class='label'>—</span><span class='count'>No actionable verdicts this run.</span></div>")
 
     return f"""
 <div class='deployment'>
   <h3>Today's deployment ({html.escape(payload.get('run_date', '?'))})</h3>
-  {"".join(rows)}
+  {"".join(sections)}
   <div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); line-height: 1.5;'>
-    Verdicts unqualified by user apply to both Aidy and Jesse (they share the watchlist universe).
-    A per-user qualifier appears only when Aidy and Jesse have diverged — typically because one has bought into a position the other is still watching.
+    The {primary_horizon}-day horizon is shown by default — that's the swing trader's primary frame. The longer horizon (a confirmation frame) is collapsed; click to expand.
+    Verdicts unqualified by user apply to both Aidy and Jesse (they share the watchlist universe); a per-user qualifier appears only when they've diverged.
     Definitions of each label are in the glossary below.
   </div>
 </div>

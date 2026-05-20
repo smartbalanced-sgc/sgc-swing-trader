@@ -34,7 +34,7 @@ from datetime import date, datetime, timezone
 
 import yaml
 
-from src import config, dashboard, snapshot, tier_classifier, trajectory
+from src import backtest, config, dashboard, snapshot, tier_classifier, trajectory
 from src.pipeline import (
     analytic_verifier,
     catalyst,
@@ -58,6 +58,7 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
     target_tickers = tickers if tickers else list(watchlist.keys())
 
     ticker_snapshots: dict[str, dict] = {}
+    price_data_by_ticker: dict[str, dict] = {}
     run_errors: list[dict] = []
 
     for ticker in target_tickers:
@@ -66,7 +67,7 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
             run_errors.append({"ticker": ticker, "stage": "lookup", "message": "not in watchlist"})
             continue
         try:
-            snap = _process_one(ticker, entry, run_date)
+            snap, price_data = _process_one(ticker, entry, run_date)
         except Exception as e:  # noqa: BLE001 - a single-ticker crash must not kill the run
             run_errors.append(
                 {
@@ -79,8 +80,21 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
             continue
 
         ticker_snapshots[ticker] = snap
+        if price_data is not None:
+            price_data_by_ticker[ticker] = price_data
         if write:
             snapshot.write(snap)
+
+    # Backtest: scores predictions from past snapshots against the
+    # subsequent price action. Inline (milliseconds, no extra API
+    # calls — uses the price arrays already fetched above). Until 14
+    # nights of snapshots have accumulated, the panel surfaces the
+    # cold-start progress; after that, hit rates fill in as each
+    # horizon elapses on past predictions.
+    try:
+        backtest_payload = backtest.run(price_data_by_ticker)
+    except Exception as e:  # noqa: BLE001
+        backtest_payload = {"status": "fail", "reason": str(e)}
 
     payload = {
         "run_date": run_date,
@@ -89,11 +103,7 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
         "watchlist": watchlist,
         "tickers": ticker_snapshots,
         "errors": run_errors,
-        # Backtest panel: read the latest weekly backtest output file
-        # (written by the separate .github/workflows/backtest.yml cron).
-        # If no backtest has run yet, the field is absent and the panel
-        # renders a friendly "weekly backtest pending" message.
-        "backtest": _load_latest_backtest_summary(),
+        "backtest": backtest_payload,
     }
 
     if write:
@@ -104,67 +114,16 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
     return payload
 
 
-# ---------- backtest summary loader ----------
-
-
-def _load_latest_backtest_summary() -> dict | None:
-    """Read the most recent weekly-backtest payload from
-    `data/backtest/*.json` (written by .github/workflows/backtest.yml)
-    and adapt it to the small shape `_render_backtest` consumes:
-
-        {"status": "ok", "hit_rate_pct", "hits", "total", "summary"}
-
-    Returns None when no backtest has run yet — the dashboard's
-    `_render_backtest` treats absent/pending the same way (friendly
-    "pending" panel)."""
-    import json
-
-    backtest_dir = config.BACKTEST_DIR
-    if not backtest_dir.exists():
-        return None
-    files = sorted(backtest_dir.glob("*.json"))
-    if not files:
-        return None
-    latest = files[-1]
-    try:
-        with latest.open() as f:
-            payload = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
-
-    metrics = payload.get("metrics") or {}
-    by_verdict = metrics.get("by_verdict") or {}
-    # "Hit" = the engine said ENTER (or HOLD) and the realized outcome
-    # was the target hit before the stop within the horizon. Sum across
-    # the actionable labels; SKIP/WAIT are correctly *not* hits to count.
-    actionable_labels = ("ENTER", "HOLD")
-    hits = sum(by_verdict.get(lbl, {}).get("target_hit_count", 0) for lbl in actionable_labels)
-    total = sum(by_verdict.get(lbl, {}).get("n", 0) for lbl in actionable_labels)
-    if total == 0:
-        return None
-    hit_rate_pct = (hits / total) * 100.0
-    run_window = payload.get("run_config") or {}
-    summary = (
-        f"Walk-forward backtest, {run_window.get('as_of_start', '?')} → "
-        f"{run_window.get('as_of_end', '?')}, sampled every "
-        f"{run_window.get('sample_every_days', '?')}d. Hit rate counts "
-        f"ENTER+HOLD verdicts where the target was hit before the stop."
-    )
-    return {
-        "status": "ok",
-        "hit_rate_pct": hit_rate_pct,
-        "hits": hits,
-        "total": total,
-        "summary": summary,
-        "run_at": run_window.get("run_at"),
-    }
-
-
 # ---------- per-ticker pipeline ----------
 
 
-def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
-    """Run the pipeline for one ticker. Returns the snapshot dict."""
+def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> tuple[dict, dict | None]:
+    """Run the pipeline for one ticker. Returns (snap, price_data).
+
+    `price_data` is the raw 5-year-history data.fetch() result, returned
+    alongside the snapshot so the inline backtest can score past
+    predictions against subsequent price bars without re-fetching. It's
+    None when the data fetch itself failed (sanity hard-fail)."""
     anchor_tier = watchlist_entry.get("tier")
     snap: dict = {
         "ticker": ticker,
@@ -187,7 +146,7 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
     if snap["data"]["status"] == "fail":
         # Sanity failure → skip math, mark everything else pending.
         snap.update(_pending_block("data sanity failed — math skipped this run"))
-        return snap
+        return snap, None
 
     # §4.2 measurement-driven tier classifier (advisory).
     snap["tier_classifier"] = _run_safely(
@@ -289,10 +248,11 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
     )
 
     # Drop the private price-data pass-through before snapshot
-    # serialization (keeps snapshot files small).
+    # serialization (keeps snapshot files small). Return it separately
+    # so the inline backtest can use it without re-fetching.
     snap.pop("_price_data", None)
 
-    return snap
+    return snap, price_data
 
 
 def _classify_with_anchor(price_data: dict, anchor_tier: str | None) -> dict:
