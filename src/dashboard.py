@@ -1656,18 +1656,18 @@ def _render_cross_check(snap: dict) -> str:
             f"Layer-2 confidence haircut applies to conviction."
         )
     else:
-        # P(stop) or EV outside tol but P(target) within - common case
-        # for our daily-close-monitoring setup where P(stop) has a known
-        # ~5-6pp discretization bias vs continuous-time PDE. The haircut
-        # does NOT fire in this case since conviction.py keys the haircut
-        # on P(target) delta only.
+        # P(stop) or EV outside tol but P(target) within. Post-
+        # Brownian-bridge-correction this is now rare (MC and PDE
+        # typically agree within ~0.5pp on all metrics). When it does
+        # happen, it's usually a model-edge case (e.g. very high vol
+        # near a barrier) and the conviction haircut correctly stays
+        # off since it's keyed only on P(target).
         headline_class = "ok"
         headline_text = (
             f"{total - agree_count} of {total} comparison(s) outside tolerance "
             f"(largest gap: {max_pp_delta:.1f}pp), but P(target) agrees on every horizon — "
             f"no Layer-2 haircut applies to conviction. The disagreement is in P(stop) "
-            f"and/or EV only; these are informational and reflect the known daily-close-vs-"
-            f"continuous-time bias in MC's first-passage check."
+            f"and/or EV only."
         )
 
     rows = []

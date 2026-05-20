@@ -138,6 +138,7 @@ NYSE_CAL = mcal.get_calendar("XNYS")
 
 _MC = config.THRESHOLDS.monte_carlo
 _EARNINGS_JUMP_ON = _MC.earnings_jump_overlay
+_BRIDGE_CORRECTION_ENABLED = getattr(_MC, "brownian_bridge_correction", True)
 _DAILY_PATH_DAYS = _MC.daily_path_days
 
 N_PATHS = config.MC_PATHS
@@ -248,6 +249,9 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
             paths_gbm_only=paths_gbm_only,
             current_price=current_price,
             horizons=HORIZONS,
+            sigma_annual=sigma_annualized,
+            rng=rng,
+            earnings_jump_day=earnings_jump_day,
         )
 
     # --- Dip/rally price-level zones per horizon ---
@@ -378,8 +382,17 @@ def _compute_user_stats(
     paths_gbm_only: np.ndarray | None,
     current_price: float,
     horizons: tuple[int, ...],
+    sigma_annual: float,
+    rng: np.random.Generator,
+    earnings_jump_day: int | None,
 ) -> dict:
     """For one user, compute first-passage stats at each horizon.
+
+    sigma_annual + rng are passed through to enable Brownian bridge
+    intraday-crossing correction (eliminates the ~5pp discretization
+    bias vs PDE). earnings_jump_day is also passed so the bridge
+    correction can SKIP that day (discrete shock != continuous
+    diffusion).
 
     When paths_gbm_only is non-None (jump overlay was active), ALSO
     compute first-passage on those parallel paths and surface as
@@ -389,20 +402,33 @@ def _compute_user_stats(
     """
     target_price = user_targets["target_price"]
     stop_price = user_targets["stop_price"]
+    # Bridge correction excludes the jump day. jump_day is 1-indexed
+    # in the public API; convert to 0-indexed for array slicing.
+    jump_idx = (earnings_jump_day - 1) if earnings_jump_day is not None else None
     out_horizons: dict[int, dict] = {}
     for h in horizons:
+        # Only apply jump-day exclusion if the jump is INSIDE this horizon's slice.
+        jump_idx_in_h = jump_idx if (jump_idx is not None and 0 <= jump_idx < h) else None
         stats = _first_passage_stats(
             paths[:, :h],
             current_price=current_price,
             target_price=target_price,
             stop_price=stop_price,
+            sigma_annual=sigma_annual,
+            rng=rng,
+            jump_day_idx=jump_idx_in_h,
         )
         if paths_gbm_only is not None:
+            # GBM-only path set has NO jump (used by PDE cross-check).
+            # Bridge correction applies to every day, no skipping.
             gbm_stats = _first_passage_stats(
                 paths_gbm_only[:, :h],
                 current_price=current_price,
                 target_price=target_price,
                 stop_price=stop_price,
+                sigma_annual=sigma_annual,
+                rng=rng,
+                jump_day_idx=None,
             )
             stats["p_target_gbm_only"] = gbm_stats["p_target"]
             stats["p_stop_gbm_only"] = gbm_stats["p_stop"]
@@ -428,15 +454,53 @@ def _first_passage_stats(
     current_price: float,
     target_price: float,
     stop_price: float,
+    sigma_annual: float | None = None,
+    rng: np.random.Generator | None = None,
+    jump_day_idx: int | None = None,
 ) -> dict:
     """First-passage stats for one (paths, horizon) pair.
 
     paths_h shape: (n_paths, h)
+
+    When the YAML flag `monte_carlo.brownian_bridge_correction` is on
+    AND `sigma_annual` + `rng` are supplied, applies Brownian bridge
+    correction to detect intraday barrier crossings that aren't visible
+    in daily closes. Without the correction, MC systematically
+    UNDERESTIMATES P(stop) by ~5pp for typical setups (the bias the
+    PDE cross-check was surfacing). The correction is a per-day per-
+    path bridge probability formula:
+
+        P(crossed during [t-1, t] | both closes on same side of barrier)
+          = exp(-2 * (barrier - p_{t-1}) * (barrier - p_t) / sigma_d^2)
+
+    derived from Brownian bridge theory (Karatzas & Shreve §2.8). The
+    earnings-jump day is excluded from bridge correction (the jump
+    dominates continuous diffusion; bridge formula doesn't apply to
+    discrete shocks).
+
     Returns: p_target, p_stop, p_both (both crossed in same path),
              p_neither, ev_normalized, ev_pct, mean_terminal_pct.
     """
     target_hit_mask = paths_h >= target_price  # bool (n_paths, h)
     stop_hit_mask = paths_h <= stop_price
+
+    # Optional Brownian bridge correction.
+    if _BRIDGE_CORRECTION_ENABLED and sigma_annual is not None and rng is not None:
+        bridge_target_mask, bridge_stop_mask = _bridge_intraday_crossings(
+            paths_h=paths_h,
+            s0=current_price,
+            target_price=target_price,
+            stop_price=stop_price,
+            sigma_annual=sigma_annual,
+            rng=rng,
+            jump_day_idx=jump_day_idx,
+        )
+        # OR the bridge crossings into the close-hit masks. A bridge
+        # hit means the path crossed sometime during day t even though
+        # the day-t close didn't; for first-passage day-counting that
+        # day is the hit day.
+        target_hit_mask = target_hit_mask | bridge_target_mask
+        stop_hit_mask = stop_hit_mask | bridge_stop_mask
 
     target_any = target_hit_mask.any(axis=1)
     stop_any = stop_hit_mask.any(axis=1)
@@ -486,6 +550,98 @@ def _first_passage_stats(
         "ev_pct": ev_pct,
         "mean_terminal_pct": mean_terminal_pct,
     }
+
+
+# ---------- Brownian bridge intraday-crossing correction ----------
+
+
+def _bridge_intraday_crossings(
+    paths_h: np.ndarray,
+    s0: float,
+    target_price: float,
+    stop_price: float,
+    sigma_annual: float,
+    rng: np.random.Generator,
+    jump_day_idx: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """For each (path, day), determine whether the path crossed a
+    barrier INTRADAY using the Brownian bridge formula.
+
+    Inputs:
+      paths_h: (n_paths, h) prices over the horizon.
+      s0: starting price (used for the day-0 -> day-1 transition).
+      target_price, stop_price: the barriers.
+      sigma_annual: the same volatility MC used to generate the paths.
+      rng: random generator (consumed for the bridge draws).
+      jump_day_idx: 0-indexed day where earnings jump applied (excluded
+        from bridge — the jump is a discrete shock, not continuous
+        diffusion, and the bridge formula assumes the latter).
+
+    Returns (target_bridge_mask, stop_bridge_mask) shape (n_paths, h)
+    where True = "bridge says the path crossed during this day."
+
+    Math: P(max over [t-1, t] >= B | both closes < B) =
+            exp(-2 * (B - p_{t-1}) * (B - p_t) / sigma_d^2)
+    in log-space, where sigma_d is daily log-vol. Derivation: Brownian
+    bridge between two endpoints on the same side of a barrier has a
+    known crossing-probability formula (Karatzas & Shreve, "Brownian
+    Motion and Stochastic Calculus", §2.8).
+
+    We sample a uniform per (path, day) and mark a bridge crossing when
+    u < P_bridge. This converts the systematic underestimate of P(stop)
+    that the close-only logic produced (~5pp documented bias vs PDE)
+    into an unbiased estimate.
+    """
+    n_paths, h = paths_h.shape
+    sigma_daily = sigma_annual / math.sqrt(TRADING_DAYS_PER_YEAR)
+    sigma_sq_d = sigma_daily * sigma_daily
+    log_target = math.log(target_price)
+    log_stop = math.log(stop_price)
+    log_s0 = math.log(s0)
+
+    log_paths = np.log(paths_h)
+    # Build "previous close" array - day-0 "previous" is log(s0); for
+    # day-t (t>=1) the previous is day-(t-1)'s close.
+    log_prev = np.concatenate(
+        [np.full((n_paths, 1), log_s0, dtype=float), log_paths[:, :-1]],
+        axis=1,
+    )
+    log_cur = log_paths
+
+    # Target bridge - both prev and current must be BELOW target for
+    # the formula to apply. Otherwise the close already crossed (handled
+    # by the close-hit mask in the caller) or the prev was on the wrong
+    # side (we don't apply bridge backward through a close-cross).
+    target_both_below = (log_prev < log_target) & (log_cur < log_target)
+    bridge_p_target = np.where(
+        target_both_below,
+        np.exp(-2.0 * (log_target - log_prev) * (log_target - log_cur) / sigma_sq_d),
+        0.0,
+    )
+    np.clip(bridge_p_target, 0.0, 1.0, out=bridge_p_target)
+
+    # Stop bridge - both prev and current must be ABOVE stop.
+    stop_both_above = (log_prev > log_stop) & (log_cur > log_stop)
+    bridge_p_stop = np.where(
+        stop_both_above,
+        np.exp(-2.0 * (log_prev - log_stop) * (log_cur - log_stop) / sigma_sq_d),
+        0.0,
+    )
+    np.clip(bridge_p_stop, 0.0, 1.0, out=bridge_p_stop)
+
+    # Exclude jump day from bridge - the jump is a discrete shock,
+    # bridge assumes continuous diffusion.
+    if jump_day_idx is not None and 0 <= jump_day_idx < h:
+        bridge_p_target[:, jump_day_idx] = 0.0
+        bridge_p_stop[:, jump_day_idx] = 0.0
+
+    # Resolve bridges: u < P -> bridge crossing happened.
+    u_target = rng.uniform(size=(n_paths, h))
+    u_stop = rng.uniform(size=(n_paths, h))
+    bridge_target_mask = u_target < bridge_p_target
+    bridge_stop_mask = u_stop < bridge_p_stop
+
+    return bridge_target_mask, bridge_stop_mask
 
 
 # ---------- price-level zones from MC paths ----------

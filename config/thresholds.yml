@@ -420,6 +420,15 @@ monte_carlo:
   # GBM throughout. Keep on for production; off useful for ablation
   # studies ("how much does the jump overlay change P(stop)?").
   earnings_jump_overlay: true
+  # Brownian bridge correction for first-passage probability. When ON
+  # (default), MC's first-passage check accounts for the probability
+  # that a path crossed a barrier INTRADAY between two daily closes
+  # that didn't themselves cross. Eliminates the ~5pp systematic
+  # underestimate of P(stop) we documented in the PDE cross-check.
+  # When OFF, uses daily-close-only logic (the original, biased
+  # behavior - useful for ablation: "did bridge correction actually
+  # close the MC<->PDE gap?").
+  brownian_bridge_correction: true
   # How many forward trading days to expose in the dashboard's
   # daily-path summary panel. Matches the 60d secondary horizon.
   daily_path_days: 60
