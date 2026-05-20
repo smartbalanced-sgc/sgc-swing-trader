@@ -107,6 +107,23 @@ Confirm to the user that the commit landed and which file was changed.
 
 ## Run modes — production vs test
 
+**RULE: Before suggesting any `python -m src.main` or `python -m
+src.backtest` command, ALWAYS ask the user whether this is a test
+run or a production run.** They look identical at the command line
+but produce very different output paths:
+
+- "Is this a test run or a production run?"
+- Test run → prefix command with `SGC_RUN_MODE=test` (outputs go to
+  `data/test/` and `docs/index-test.html`; no production state
+  touched).
+- Production run → no env var (outputs go to canonical paths and
+  accumulate as real history).
+
+If the user is iterating on the engine, calibrating thresholds, or
+debugging a verdict, the answer is almost always "test." If they're
+running the actual nightly cycle or committing to a real verdict,
+it's "production." When in doubt, ask. Never assume.
+
 The engine has two modes, controlled by the `SGC_RUN_MODE` env var:
 
 - **production** (default — what the nightly cron uses, no env var set):

@@ -49,6 +49,9 @@ CACHE_DIR = config.DATA_DIR / "cache"
 FETCH_TIMEOUT_SEC = config.THRESHOLDS.engine.fetch_timeout_sec
 HISTORY_YEARS = config.THRESHOLDS.engine.history_years
 FRESHNESS_HARD_FAIL_DAYS = config.THRESHOLDS.data_sanity.freshness_hard_fail_days
+# Cache TTL: cache entries older than this force a fresh fetch. See
+# the thresholds.yml comment for the why behind 18 hours.
+CACHE_TTL_HOURS = getattr(config.THRESHOLDS.data_sanity, "cache_ttl_hours", 18)
 COMPLETENESS_HARD_FAIL_RATIO = config.THRESHOLDS.data_sanity.completeness_hard_fail_ratio
 SPLIT_DIV_WARN_RETURN = config.THRESHOLDS.data_sanity.split_div_warn_return
 VOLUME_WARN_RATIO = config.THRESHOLDS.data_sanity.volume_warn_ratio
@@ -63,13 +66,28 @@ def fetch(ticker: str, refresh: bool = False) -> dict:
     """Fetch ticker data from FMP (or cache), run sanity checks, return payload.
 
     Returns a dict with keys: ticker, as_of, profile, prices, sanity,
-    source, fetched_at. Schema documented at the top of this module.
+    source ("fmp" | "cache:fresh"), fetched_at. Schema documented at
+    the top of this module.
+
+    Cache behavior: if a cache file exists AND was written less than
+    CACHE_TTL_HOURS hours ago, the cached payload is returned with
+    source="cache:fresh". Otherwise, a fresh FMP fetch happens. This
+    is critical: without the TTL, the nightly cron would serve the
+    previous day's prices forever because the cache file always
+    exists after the first run.
+
+    Pass refresh=True to force a fresh fetch regardless of cache age
+    (used by smoke tests and manual probes).
     """
     cache_path = CACHE_DIR / f"{ticker}.json"
 
     if not refresh and cache_path.exists():
-        with cache_path.open() as f:
-            return json.load(f)
+        cached = _load_cache(cache_path)
+        if cached is not None and _cache_is_fresh(cached):
+            cached["source"] = "cache:fresh"
+            return cached
+        # Cache exists but is stale (> TTL old) — fall through to
+        # fresh fetch. Old cache file gets overwritten below.
 
     profile = _fetch_profile(ticker)
     prices = _fetch_prices(ticker)
@@ -90,6 +108,30 @@ def fetch(ticker: str, refresh: bool = False) -> dict:
         json.dump(result, f, indent=2)
 
     return result
+
+
+def _load_cache(cache_path) -> dict | None:
+    try:
+        with cache_path.open() as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _cache_is_fresh(cached: dict) -> bool:
+    """True iff the cache's fetched_at timestamp is within the TTL.
+    Stale or missing timestamp -> False (forces fresh fetch)."""
+    ts = cached.get("fetched_at")
+    if not ts:
+        return False
+    try:
+        when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - when
+        return age < timedelta(hours=CACHE_TTL_HOURS)
+    except ValueError:
+        return False
 
 
 # ---------- FMP fetchers (HTTP layer lives in src.data_sources.fmp) ----------

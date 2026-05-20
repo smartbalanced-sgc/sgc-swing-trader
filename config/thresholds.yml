@@ -38,6 +38,16 @@ data_sanity:
   split_div_warn_return: 0.30
   # WARN: zero-volume bars exceed this fraction of the window.
   volume_warn_ratio: 0.05
+  # Price-data cache TTL (hours). 18 hours is the sweet spot:
+  #   - Multiple same-day runs reuse the cache (saves FMP quota during
+  #     iteration / dashboard tweaks).
+  #   - Overnight rollover (cron at 03:00 UTC, last fetch from previous
+  #     night's cron) forces a fresh fetch -> never running on
+  #     yesterday's prices.
+  # Before this TTL existed, data.fetch() served whatever was on disk
+  # forever, meaning the nightly cron could happily serve the previous
+  # day's verdict if it didn't manually refresh. Subtle and bad.
+  cache_ttl_hours: 18
 
 # ---------- Step 3 — Catalyst detection ----------
 #
