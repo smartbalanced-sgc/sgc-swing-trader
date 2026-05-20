@@ -89,6 +89,36 @@ html, body {
 .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px 80px; }
 .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
 
+/* ---------- TEST MODE banner — visible warning so iteration runs
+ * can't be mistaken for production renders. */
+.test-banner {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  margin: 0 20px 14px;
+  padding: 10px 18px;
+  font-size: 13px;
+  color: #78350f;
+}
+.test-banner strong { color: #b45309; letter-spacing: 0.02em; }
+.test-banner code {
+  background: rgba(180, 83, 9, 0.10);
+  padding: 1px 6px; border-radius: 4px; font-size: 12px;
+}
+.mode-tag {
+  display: inline-block;
+  font-size: 11px;
+  background: #f59e0b;
+  color: #1a1a1a;
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 /* ---------- top header band — walnut with gold accent stripe ---------- */
 header.band {
   background: linear-gradient(135deg, var(--header-bg-start) 0%, var(--header-bg-end) 100%);
@@ -592,10 +622,24 @@ def _render_header(payload: dict) -> str:
     # estimate (cost-per-run × runs_per_year).
     cost_html = _render_cost(payload)
 
+    # Test-mode banner — clear visual indicator when SGC_RUN_MODE=test
+    # so iteration runs can't be mistaken for production output.
+    test_banner = ""
+    if config.IS_TEST_MODE:
+        test_banner = f"""
+<div class="test-banner">
+  <strong>⚠ TEST MODE</strong> — outputs in <code>data/test/</code> and this file
+  (<code>docs/index-test.html</code>) do <em>not</em> contribute to production
+  history. Drop the <code>SGC_RUN_MODE</code> env var (or set it to
+  <code>production</code>) to publish a real run.
+</div>
+"""
+
     return f"""
+{test_banner}
 <header class="band">
   <div class="wrap">
-    <h1>SGC Swing Trader</h1>
+    <h1>SGC Swing Trader{' <span class="mode-tag">test</span>' if config.IS_TEST_MODE else ''}</h1>
     <div class="subtitle">Conviction + timing for {n_tick} ticker(s) across {", ".join(f"{h}d" for h in config.HORIZONS)} horizons. Per-user verdicts for Aidy and Jesse.</div>
     <div class="meta">
       <span>Run date: <strong>{html.escape(run_date)}</strong></span>

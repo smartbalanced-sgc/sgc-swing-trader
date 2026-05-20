@@ -772,7 +772,7 @@ def main() -> int:
 
     # Write to disk
     out_path = Path(args.out) if args.out else (
-        config.DATA_DIR / "backtest" / f"{date.today().isoformat()}.json"
+        config.BACKTEST_DIR / f"{date.today().isoformat()}.json"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w") as f:

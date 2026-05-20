@@ -19,21 +19,57 @@ Access pattern:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import yaml
 
+# ---------- run mode (production vs test) ----------
+#
+# Two modes:
+#   - production (default): outputs accumulate as "real" history. The
+#     Conviction Trajectory panel, backtest aggregates, and the
+#     published dashboard render all read from these paths. The
+#     nightly GitHub Actions cron runs in this mode (no env var set).
+#   - test: outputs go to data/test/ and a separate dashboard file.
+#     Production history stays untouched no matter how many times you
+#     iterate. Use this while developing or calibrating; switch to
+#     production only when you're ready to go live.
+#
+# Activate test mode with:
+#     SGC_RUN_MODE=test python -m src.main
+#     SGC_RUN_MODE=test python -m src.backtest ...
+#
+# Caches (data/cache/*) are SHARED across modes - they're just FMP/
+# yfinance response caching for performance, the underlying data is
+# the same regardless of which mode wrote them.
+
+RUN_MODE = os.environ.get("SGC_RUN_MODE", "production").lower().strip()
+IS_TEST_MODE = RUN_MODE != "production"
+
 # ---------- repo paths (NOT calibratable; structural) ----------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
+# Universe definition lives at root; it's shared across modes.
 WATCHLIST_PATH = DATA_DIR / "watchlist.yml"
-SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 DOCS_DIR = REPO_ROOT / "docs"
-DASHBOARD_PATH = DOCS_DIR / "index.html"
 CONFIG_DIR = REPO_ROOT / "config"
 THRESHOLDS_PATH = CONFIG_DIR / "thresholds.yml"
+
+# Mode-aware output paths. Test-mode runs route everything that
+# *accumulates as history* into data/test/, so production runs that
+# come later see a clean slate.
+if IS_TEST_MODE:
+    _MODE_DIR = DATA_DIR / "test"
+    SNAPSHOTS_DIR = _MODE_DIR / "snapshots"
+    BACKTEST_DIR = _MODE_DIR / "backtest"
+    DASHBOARD_PATH = DOCS_DIR / "index-test.html"
+else:
+    SNAPSHOTS_DIR = DATA_DIR / "snapshots"
+    BACKTEST_DIR = DATA_DIR / "backtest"
+    DASHBOARD_PATH = DOCS_DIR / "index.html"
 
 # Recognized users (shared Claude.ai account; see CLAUDE.md)
 USERS = ("aidy", "jesse")

@@ -104,3 +104,55 @@ one lord — Aidy or Jesse?"
 
 Push to main. The next nightly cron run picks up the change automatically.
 Confirm to the user that the commit landed and which file was changed.
+
+## Run modes — production vs test
+
+The engine has two modes, controlled by the `SGC_RUN_MODE` env var:
+
+- **production** (default — what the nightly cron uses, no env var set):
+  outputs go to their canonical paths and accumulate as real history.
+  Snapshots feed the multi-night Conviction Trajectory panel. Backtest
+  results aggregate against real production data. The published
+  dashboard at `docs/index.html` is what gets seen.
+- **test** (`SGC_RUN_MODE=test python -m ...`): outputs route to
+  `data/test/snapshots/`, `data/test/backtest/`, and
+  `docs/index-test.html`. Production state is untouched no matter how
+  many times you iterate. The dashboard shows a clear "TEST MODE"
+  banner so test renders can't be mistaken for production ones.
+
+Caches (`data/cache/*` — FMP and yfinance response caching) are SHARED
+between modes. They're just network optimization; the underlying data
+is identical regardless of which mode wrote them.
+
+### When to use which
+
+- Iterating on the engine (changing thresholds, tuning the conviction
+  layer, debugging a verdict): test mode. Run as many times as you
+  want; production never sees it.
+- Adding a ticker / updating positions / running an actual nightly
+  cycle for the user: production mode (no env var needed).
+- Running the backtest harness against historical data to validate
+  calibration: production mode is fine since the backtest itself uses
+  truncated price data, not historical snapshots. But if you want the
+  results file segregated from real production runs, use test mode.
+
+### Going-live transition (one-time)
+
+When ready to switch from "iterating" to "publishing a real nightly run":
+
+1. **Verify**: review your latest test-mode dashboard at
+   `docs/index-test.html`. Sign off on the output.
+2. **Clean test data** (optional but recommended for a clean slate):
+   `rm -rf data/test/`
+3. **Run production once**: `python -m src.main` (no env var). This
+   writes the first real snapshot and the canonical
+   `docs/index.html`.
+4. **Wire to cron**: GitHub Actions `.github/workflows/nightly.yml`
+   runs `python -m src.main` (no env var) every night at 03:00 UTC.
+5. **From this point on**, production snapshots accumulate. The
+   Conviction Trajectory panel starts populating after ~5 nights;
+   the backtest can be re-run with real history after ~20 nights.
+
+You can keep iterating in test mode AT ANY TIME after going live —
+just `SGC_RUN_MODE=test python -m src.main` and the production
+history stays untouched.
