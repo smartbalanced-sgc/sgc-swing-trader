@@ -20,15 +20,30 @@ and use kwargs only.
 
 from __future__ import annotations
 
+import logging
 import os
+import random
 import re
+import time
 
 import requests
 
 from src import config
 
+logger = logging.getLogger(__name__)
+
 FMP_BASE = "https://financialmodelingprep.com/stable"
 FETCH_TIMEOUT_SEC = config.THRESHOLDS.engine.fetch_timeout_sec
+
+# Retry config for transient failures (rate-limit + transient 5xx).
+# Backtest runs hit FMP ~150+ times per ticker × N sample dates; a
+# rate-limit response would crash the whole backtest without retry.
+# Production runs are much lighter (~6 calls per ticker per run) but
+# can still see transient 5xx after deploys or during FMP maintenance.
+_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+_RETRY_MAX_ATTEMPTS = 4
+_RETRY_BASE_DELAY_SEC = 1.0      # initial backoff
+_RETRY_MAX_DELAY_SEC = 30.0      # cap on individual sleep
 
 # Matches `apikey=...` in any string (URL, error message, log line).
 # Used to redact the API key from anything we might print or raise —
@@ -91,7 +106,7 @@ def get(endpoint: str, symbol: str | None = None, **extra) -> object:
         params[key] = v
 
     url = f"{FMP_BASE}/{endpoint}"
-    resp = requests.get(url, params=params, timeout=FETCH_TIMEOUT_SEC)
+    resp = _request_with_retry(url, params, endpoint)
 
     if resp.status_code == 402:
         raise FMPPlanGatedError(
@@ -113,3 +128,70 @@ def get(endpoint: str, symbol: str | None = None, **extra) -> object:
         # transcripts.
         raise requests.HTTPError(redact(str(e)), response=e.response) from None
     return resp.json()
+
+
+def _request_with_retry(url: str, params: dict, endpoint: str) -> requests.Response:
+    """GET with exponential-backoff retry on transient failures
+    (429 rate limit + transient 5xx). 402/403 are returned without
+    retry - they're permanent on this plan/endpoint and retrying
+    would just burn quota.
+
+    Backoff schedule (with ±20% jitter to avoid thundering herd):
+      attempt 1: immediate
+      attempt 2: ~1s
+      attempt 3: ~4s
+      attempt 4: ~16s
+    Total worst case ~21 seconds before giving up.
+    """
+    last_resp = None
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            resp = requests.get(url, params=params, timeout=FETCH_TIMEOUT_SEC)
+        except requests.RequestException as e:
+            # Network-level failure (DNS, connection refused, timeout).
+            # Treat the same as a retryable 5xx.
+            if attempt + 1 >= _RETRY_MAX_ATTEMPTS:
+                raise
+            delay = _backoff_delay(attempt)
+            logger.warning(
+                f"FMP /{endpoint} network error attempt {attempt+1}/{_RETRY_MAX_ATTEMPTS} "
+                f"({type(e).__name__}); sleeping {delay:.1f}s"
+            )
+            time.sleep(delay)
+            continue
+
+        last_resp = resp
+        if resp.status_code not in _RETRY_STATUS_CODES:
+            # Either 2xx (success), or a "definitive" error like 402/403
+            # that retry wouldn't fix. Return for caller to handle.
+            return resp
+
+        if attempt + 1 >= _RETRY_MAX_ATTEMPTS:
+            # Exhausted retries; return the last response and let the
+            # caller raise via raise_for_status().
+            return resp
+
+        # Respect Retry-After header if present (RFC-7231); else our
+        # exponential backoff. Both 429s and 5xx may include it.
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after:
+            try:
+                delay = min(float(retry_after), _RETRY_MAX_DELAY_SEC)
+            except ValueError:
+                delay = _backoff_delay(attempt)
+        else:
+            delay = _backoff_delay(attempt)
+        logger.warning(
+            f"FMP /{endpoint} returned {resp.status_code} attempt {attempt+1}/"
+            f"{_RETRY_MAX_ATTEMPTS}; sleeping {delay:.1f}s"
+        )
+        time.sleep(delay)
+
+    return last_resp  # type: ignore[return-value]
+
+
+def _backoff_delay(attempt: int) -> float:
+    """Exponential backoff with jitter. attempt=0 -> ~1s, 1 -> ~4s, 2 -> ~16s."""
+    base = _RETRY_BASE_DELAY_SEC * (4 ** attempt)
+    jitter = base * random.uniform(-0.2, 0.2)
+    return min(_RETRY_MAX_DELAY_SEC, max(0.0, base + jitter))

@@ -479,9 +479,29 @@ fair_value:
   # DCF parameters
   dcf:
     enabled: true
-    # Discount rate (WACC). 9% is a typical equity discount rate -
-    # ~4% risk-free + ~5% equity risk premium. Calibratable per
-    # macro regime later.
+    # Tier-aware discount rate (WACC / required return). Higher-risk
+    # tiers demand a higher equity risk premium - the literature is
+    # consistent on this. Bands:
+    #   A: 8.5%  - mature mega-caps, broad analyst coverage, stable
+    #              cash flows (NVDA-like). ~4% risk-free + ~4.5% ERP.
+    #   B: 9.5%  - mid-cap growth, moderate idiosyncratic risk
+    #              (AMAT-like cyclical semis). ~4% + ~5.5% ERP.
+    #   C: 12.0% - small-cap, fat-tailed, often pre-profitability
+    #              (IONQ-like quantum). ~4% + ~8% ERP for the size +
+    #              business-model risk premium.
+    # Earlier the single 9% rate produced a fair value that was too
+    # generous for Tier C names (their cash flows deserve a steeper
+    # discount given the wider distribution of outcomes) and too
+    # punishing for Tier A (their flows are more predictable than the
+    # 9% required-return implies).
+    discount_rate_by_tier:
+      A: 0.085
+      B: 0.095
+      C: 0.120
+    # Default WACC when ticker has no tier label.
+    discount_rate_default: 0.09
+    # Backwards-compatible alias (read by _resolve_discount_rate as
+    # fallback if discount_rate_by_tier missing).
     discount_rate: 0.09
     # Terminal growth rate (perpetuity post-projection). 2.5% =
     # roughly long-run GDP+inflation - the maximum reasonable

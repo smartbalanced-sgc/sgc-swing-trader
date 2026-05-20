@@ -271,8 +271,10 @@ def _dcf(ticker: str, profile: dict, tier: str | None = None) -> dict | None:
         primary=getattr(cfg, "growth_estimator", "cagr"),
     )
 
-    # 2-stage DCF math
-    r = cfg.discount_rate
+    # 2-stage DCF math - tier-aware discount rate (WACC). Higher-risk
+    # tiers demand higher equity risk premium; lower-risk tiers can
+    # bear a tighter discount.
+    r = _resolve_discount_rate(tier)
     g = growth_rate
     g_terminal = cfg.terminal_growth
     n = cfg.projection_years
@@ -311,6 +313,7 @@ def _dcf(ticker: str, profile: dict, tier: str | None = None) -> dict | None:
             "growth_rate_cap_tier": tier,
             "growth_estimator_used": estimator_used,
             "discount_rate": r,
+            "discount_rate_tier": tier,
             "terminal_growth": g_terminal,
             "projection_years": n,
             "pv_projected_billions": round(pv_projected / 1e9, 3),
@@ -333,6 +336,24 @@ def _resolve_growth_cap(tier: str | None) -> float:
     # Backwards-compat with older configs that only had `growth_rate_cap`
     legacy = getattr(_FV.dcf, "growth_rate_cap", None)
     return float(legacy) if legacy is not None else 0.25
+
+
+def _resolve_discount_rate(tier: str | None) -> float:
+    """Pull the tier-specific WACC. Higher-risk tiers demand higher
+    equity risk premium - the finance literature is consistent on
+    this. Falls back to discount_rate_default, then to the legacy
+    single discount_rate key if neither tiered nor default is set."""
+    by_tier = getattr(_FV.dcf, "discount_rate_by_tier", None)
+    if tier and by_tier is not None:
+        r = getattr(by_tier, tier, None)
+        if r is not None:
+            return float(r)
+    default = getattr(_FV.dcf, "discount_rate_default", None)
+    if default is not None:
+        return float(default)
+    # Backwards-compat: single discount_rate key
+    legacy = getattr(_FV.dcf, "discount_rate", None)
+    return float(legacy) if legacy is not None else 0.09
 
 
 def _estimate_growth_rate(
@@ -624,12 +645,14 @@ def _build_narrative(
         if m["name"] == "DCF":
             d = m["details"]
             tier_str = f" tier-{d['growth_rate_cap_tier']}" if d.get("growth_rate_cap_tier") else ""
+            disc_tier_str = f" tier-{d['discount_rate_tier']}" if d.get("discount_rate_tier") else ""
             est_str = d.get("growth_estimator_used", "?")
             parts.append(
                 f"DCF $${m['value']:.2f}: TTM FCF ${d['fcf_ttm']/1e9:.2f}B, "
                 f"growth {d['growth_rate_estimated']*100:.1f}%/yr "
                 f"({est_str} estimator, capped at {d['growth_rate_cap_used']*100:.0f}%{tier_str}), "
-                f"discount {d['discount_rate']*100:.1f}%, terminal {d['terminal_growth']*100:.1f}%."
+                f"discount {d['discount_rate']*100:.1f}%{disc_tier_str}, "
+                f"terminal {d['terminal_growth']*100:.1f}%."
             )
         elif m["name"] == "Forward P/E peers":
             d = m["details"]
