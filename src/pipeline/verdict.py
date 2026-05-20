@@ -286,6 +286,40 @@ def _build_thesis(snap: dict, horizons_out: dict) -> dict:
                 phrase = f"current at {sigmas:+.1f}sigma — deeply discounted"
             parts.append(f"Fair value mean ${range_mean:.2f} ({phrase}).")
 
+    # 6.7 RSI signal (classic swing-trader indicator). The price-levels
+    # block carries RSI(14) - call it out when it's meaningfully out of
+    # the 40-60 neutral band. RSI<35 + watching = potential dip-buy
+    # setup; RSI>65 + entered = approaching the rally peak / consider
+    # trim. The verdict math doesn't currently incorporate RSI as a
+    # haircut or veto - we surface it in the narrative only so the user
+    # can layer their own judgment on top.
+    pl_block = snap.get("price_levels") or {}
+    rsi = pl_block.get("rsi")
+    if rsi is not None:
+        if rsi <= 30:
+            parts.append(
+                f"RSI(14) is {rsi:.1f} — deeply oversold (classic dip-buy "
+                f"signal). Combined with positive setup, this is a high-conviction "
+                f"dip; combined with deteriorating fundamentals, this can keep "
+                f"falling."
+            )
+        elif rsi <= 35:
+            parts.append(
+                f"RSI(14) is {rsi:.1f} — approaching oversold. "
+                f"Watch for a turn off this level."
+            )
+        elif rsi >= 70:
+            parts.append(
+                f"RSI(14) is {rsi:.1f} — overbought (classic rally-sell "
+                f"signal). Bull-momentum names can stay overbought for weeks, "
+                f"but the asymmetry shifts: less upside, more reversal risk."
+            )
+        elif rsi >= 65:
+            parts.append(
+                f"RSI(14) is {rsi:.1f} — approaching overbought. "
+                f"Be alert for stalling momentum."
+            )
+
     # 7. MC stats for the primary horizon (using first user)
     primary_h = config.HORIZONS[0]
     primary_h_users = horizons_out.get(primary_h, {})

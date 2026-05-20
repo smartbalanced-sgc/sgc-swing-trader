@@ -414,6 +414,39 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .action-group .ag-noaction { font-size: 12.5px; color: var(--text-soft); font-style: italic; padding: 4px 0; }
 .action-group .cp-hint { font-size: 11.5px; color: var(--text-soft); margin-top: 8px; font-style: italic; }
 .action-group .copy-paste { background: #1f2937; color: #f3f4f6; padding: 5px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; margin-top: 4px; display: inline-block; }
+/* Forward-looking trigger callout (ENTER-at-dip or TRIM-near-target).
+ * Distinct from the verdict — this is "what to do next" given the
+ * verdict, not a substitute for it. */
+.action-group .ag-trigger {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.action-group .ag-trigger.enter-trigger {
+  background: #fef9ed;             /* warm cream */
+  border: 1px solid #f6d99b;
+  border-left: 3px solid var(--gold);
+}
+.action-group .ag-trigger.trim-hint {
+  background: #f0fdf4;             /* soft green */
+  border: 1px solid #bbf7d0;
+  border-left: 3px solid var(--moss);
+}
+.action-group .ag-trigger .trigger-icon { font-size: 16px; line-height: 1; }
+.action-group .ag-trigger .trigger-body { flex: 1; }
+.action-group .ag-trigger .trigger-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 3px;
+}
+.action-group .ag-trigger.enter-trigger .trigger-label { color: var(--gold-deep); }
+.action-group .ag-trigger.trim-hint .trigger-label { color: var(--moss); }
+.action-group .ag-trigger .trigger-detail { color: var(--text); }
+.action-group .ag-trigger strong { font-family: ui-monospace, monospace; }
 .action-group .copy-paste::before { content: "$ "; color: #9ca3af; }
 
 /* ---------- collapsible subpanel pattern ---------- */
@@ -1197,6 +1230,51 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
             if cp_hint:
                 cp_html = f"<div class='cp-hint'>{cp_hint}</div>{cp_html}"
 
+            # Forward-looking trigger price: classic swing-trader signals
+            # that the system already has the data for but didn't surface
+            # alongside the verdict before this commit.
+            #   - "watching + SKIP/WAIT": where would the engine ENTER?
+            #     The dip-entry zone (70% of MC paths touch it) IS the
+            #     answer. Suggesting a buy-limit price means the trader
+            #     can set the alert and stop watching.
+            #   - "entered + HOLD" near target: the system says HOLD but
+            #     if price is within 5% of target, "consider trimming"
+            #     is a useful prompt to lock partial profit even before
+            #     conviction breaks.
+            trigger_html = ""
+            pl_horizon = ((snap.get("price_levels") or {}).get("horizons") or {}).get(h) or {}
+            dip = pl_horizon.get("dip") or {}
+            rally = pl_horizon.get("rally") or {}
+
+            if g["state"] == "watching" and verdict in ("SKIP", "WAIT") and dip.get("price") and current_price:
+                dip_price = dip["price"]
+                dip_pct = (dip_price - current_price) / current_price * 100
+                dip_date_range = dip.get("date_range", "")
+                trigger_html = f"""
+<div class='ag-trigger enter-trigger'>
+  <span class='trigger-icon'>📍</span>
+  <div class='trigger-body'>
+    <div class='trigger-label'>ENTER trigger price</div>
+    <div class='trigger-detail'>If <strong>{html.escape(ticker_sym)}</strong> drops to <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now) it hits the dip-entry zone — that's the price where 70% of {config.MC_PATHS:,} MC paths touch on the way down. Date range: {html.escape(dip_date_range)}. Consider setting a buy-limit order at this level.</div>
+  </div>
+</div>
+"""
+
+            if g["state"] == "entered" and verdict == "HOLD" and target and current_price:
+                pct_to_target = (target - current_price) / current_price * 100
+                # Within 5% of target — proactive trim hint (does NOT
+                # override conviction's HOLD; just surfaces an option).
+                if 0 < pct_to_target <= 5:
+                    trigger_html = f"""
+<div class='ag-trigger trim-hint'>
+  <span class='trigger-icon'>🎯</span>
+  <div class='trigger-body'>
+    <div class='trigger-label'>Near your target — consider trimming</div>
+    <div class='trigger-detail'>Current <strong>${current_price:.2f}</strong> is just <strong>{pct_to_target:.1f}%</strong> below your target <strong>${target:.2f}</strong>. The engine verdict is still HOLD because conviction hasn't broken, but partial profit-taking here locks gains and reduces exposure to a reversal. Standard swing-trade discipline: trim some at target, let the rest run.</div>
+  </div>
+</div>
+"""
+
             group_blocks.append(f"""
 <div class='action-group'>
   <div class='ag-headline'>
@@ -1205,6 +1283,7 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
   </div>
   <div class='ag-reason'>{html.escape(reason)}</div>
   {targets_html}
+  {trigger_html}
   {cp_html}
 </div>
 """)
