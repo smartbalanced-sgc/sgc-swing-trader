@@ -32,11 +32,13 @@ from src import config
 
 _STYLES = """
 :root {
-  --bg: #f7f7f5;
+  --bg: #f5f4ef;
+  --bg-tint: #ede9dc;          /* warm parchment top-of-page tint */
+  --bg-accent: #f8f5ed;        /* very subtle for panels */
   --panel: #ffffff;
-  --border: #e5e5e5;
-  --border-strong: #d4d4d4;
-  --text: #111111;
+  --border: #e2dfd5;
+  --border-strong: #c8c3b3;
+  --text: #1a1a1a;
   --text-soft: #525252;
   --muted: #737373;
   --ok: #15803d;
@@ -47,13 +49,21 @@ _STYLES = """
   --fail-bg: #fef2f2;
   --pending: #6b7280;
   --pending-bg: #f9fafb;
-  --accent: #1d4ed8;
-  --shadow: 0 1px 2px rgba(0,0,0,0.04);
+  --accent: #1e40af;            /* deeper blue — more elegant than royal */
+  --accent-soft: #e0e7ff;
+  --gold: #b87333;              /* subtle copper accent for highlights */
+  --header-grad-start: #1e293b; /* slate 800 */
+  --header-grad-end: #334155;   /* slate 700 */
+  --shadow: 0 1px 3px rgba(60, 50, 40, 0.06), 0 1px 2px rgba(60, 50, 40, 0.04);
+  --shadow-lg: 0 4px 14px rgba(60, 50, 40, 0.08);
 }
 * { box-sizing: border-box; }
 html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, var(--bg-tint) 0%, var(--bg) 360px),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   margin: 0;
   padding: 0;
@@ -64,20 +74,38 @@ html, body {
 .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px 80px; }
 .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
 
-/* ---------- top header band ---------- */
+/* ---------- top header band — elegant slate gradient ---------- */
 header.band {
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  padding: 18px 0;
-  margin-bottom: 22px;
+  background: linear-gradient(135deg, var(--header-grad-start) 0%, var(--header-grad-end) 100%);
+  color: #f1f5f9;
+  border-bottom: 3px solid var(--gold);
+  padding: 24px 0 22px;
+  margin-bottom: 26px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
 }
-header.band h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
-header.band .subtitle { color: var(--muted); font-size: 13px; }
-header.band .meta { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 10px; font-size: 12px; color: var(--text-soft); }
-header.band .meta strong { color: var(--text); }
+header.band .wrap { padding: 0 28px; }
+header.band h1 {
+  font-size: 22px; font-weight: 600; margin: 0 0 6px;
+  letter-spacing: -0.01em; color: #f8fafc;
+}
+header.band .subtitle { color: #cbd5e1; font-size: 13px; }
+header.band .meta {
+  display: flex; flex-wrap: wrap; gap: 8px 24px;
+  margin-top: 14px; font-size: 12px; color: #cbd5e1;
+}
+header.band .meta strong { color: #f1f5f9; font-weight: 600; }
 
 /* ---------- section headings ---------- */
-h2.section { font-size: 14px; font-weight: 600; margin: 28px 0 10px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+h2.section {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
 
 /* ---------- top-level expandable info blocks ---------- */
 details.info-block {
@@ -103,12 +131,13 @@ details.info-block > .body { padding: 0 16px 16px; font-size: 13px; color: var(-
 .deployment {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 18px 20px;
+  border-radius: 10px;
+  padding: 20px 22px;
   box-shadow: var(--shadow);
   margin-bottom: 24px;
+  border-left: 3px solid var(--accent);
 }
-.deployment h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-soft); margin: 0 0 12px; }
+.deployment h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 0 0 12px; }
 .deployment .row { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 8px 0; border-top: 1px solid var(--border); align-items: baseline; }
 .deployment .row:first-of-type { border-top: 0; }
 .deployment .label { font-weight: 600; min-width: 130px; }
@@ -119,17 +148,20 @@ details.info-block > .body { padding: 0 16px 16px; font-size: 13px; color: var(-
 section.ticker-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   margin: 20px 0;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
+  /* Subtle gold-tinted top border for elegance */
+  border-top: 3px solid var(--gold);
 }
 section.ticker-card > .card-head {
   padding: 18px 22px;
   border-bottom: 1px solid var(--border);
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 22px;
+  background: linear-gradient(180deg, #fdfcf9 0%, var(--panel) 100%);
 }
-section.ticker-card > .card-head .symbol { font-size: 22px; font-weight: 700; font-family: ui-monospace, monospace; letter-spacing: -0.02em; }
+section.ticker-card > .card-head .symbol { font-size: 22px; font-weight: 700; font-family: ui-monospace, monospace; letter-spacing: -0.02em; color: var(--text); }
 section.ticker-card > .card-head .meta { color: var(--muted); font-size: 12.5px; }
 section.ticker-card > .card-body { padding: 4px 22px 22px; }
 
@@ -329,25 +361,35 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .action-group .copy-paste::before { content: "$ "; color: #9ca3af; }
 
 /* ---------- collapsible subpanel pattern ---------- */
-details.subpanel { padding: 0; transition: box-shadow 0.15s, border-color 0.15s; }
-details.subpanel:hover { border-color: var(--accent); box-shadow: 0 2px 6px rgba(29,78,216,0.08); }
+/* Smaller / tighter typography because these are "extra detail" rows -
+ * the user might or might not open them, so they shouldn't dominate
+ * vertical space. */
+details.subpanel {
+  padding: 0;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  margin-bottom: 6px;
+}
+details.subpanel:hover { border-color: var(--accent); box-shadow: 0 2px 6px rgba(30,64,175,0.08); }
 details.subpanel[open] { background: var(--panel); border-color: var(--border-strong); }
 details.subpanel > summary {
-  padding: 12px 16px;
+  padding: 8px 14px;            /* was 12px 16px - tighter */
   cursor: pointer;
   list-style: none;
   border-radius: 8px;
   transition: background 0.15s;
+  font-size: 12.5px;            /* was inherit (14px) - smaller */
 }
 details.subpanel[open] > summary { border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--border); background: #fafaf9; }
 details.subpanel > summary::-webkit-details-marker { display: none; }
-details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; gap: 8px 14px; }
-details.subpanel > .body { padding: 14px 16px; background: var(--panel); border-radius: 0 0 8px 8px; }
+details.subpanel > summary .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin: 0; gap: 6px 12px; }
+details.subpanel > summary .head .title { font-weight: 500; }       /* was 600 default */
+details.subpanel > summary .head .meta { color: var(--muted); font-size: 11.5px; }
+details.subpanel > .body { padding: 14px 16px; background: var(--panel); border-radius: 0 0 8px 8px; font-size: 13px; }
 /* Explicit Expand / Collapse affordance — always visible cue. */
 details.subpanel > summary .expand-cue {
   display: inline-block;
   margin-left: auto;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--accent);
   font-weight: 600;
   white-space: nowrap;
@@ -359,7 +401,7 @@ details.subpanel > summary .expand-cue {
 details.subpanel:hover > summary .expand-cue { background: var(--accent); color: white; }
 details.subpanel[open] > summary .expand-cue { background: #f4f4f5; color: var(--text-soft); border-color: var(--border-strong); }
 details.subpanel[open]:hover > summary .expand-cue { background: var(--text-soft); color: white; border-color: var(--text-soft); }
-details.subpanel > summary .expand-cue::before { content: "+ Expand for plain-English details"; }
+details.subpanel > summary .expand-cue::before { content: "+ Expand"; }
 details.subpanel[open] > summary .expand-cue::before { content: "− Collapse"; }
 
 /* ---------- engine read panel (always visible) ---------- */
@@ -502,7 +544,7 @@ def _render_header(payload: dict) -> str:
 
     return f"""
 <header class="band">
-  <div class="wrap" style="padding: 0;">
+  <div class="wrap">
     <h1>SGC Swing Trader</h1>
     <div class="subtitle">Conviction + timing for {n_tick} ticker(s) across {", ".join(f"{h}d" for h in config.HORIZONS)} horizons. Per-user verdicts for Aidy and Jesse.</div>
     <div class="meta">
@@ -807,32 +849,64 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
         _render_engine_read(snap),
         # 4. Conviction trajectory (expanded — sparkline)
         _render_trajectory(snap),
-        # Thesis collapsed (the multi-sentence summary)
+
+        # Plain-English titles for collapsed extra-detail panels. The
+        # idea: a user scanning the page sees "Why the engine says
+        # this", "Earnings + news", "Market mood" etc. — not internal
+        # jargon. Mouse-over reveals the technical headline.
         _collapsible(
-            "Thesis — full plain-English summary",
+            "What's the story today?",
             html.escape(thesis_summary) if thesis_summary else "click to read",
             _render_thesis(snap),
         ),
-        # Conviction breakdown — 3-layer detail collapsed by default
+        # Day-by-day price forecast — moved up to sit right under
+        # Thesis per Jesse's request (most-asked "what could happen"
+        # question after reading the story).
         _collapsible(
-            "Conviction breakdown — 3-layer detail",
+            "Day-by-day price forecast",
+            "median scenario across 50,000 simulated paths",
+            _render_daily_path(snap),
+        ),
+        _collapsible(
+            "Why the engine says this",
             _conviction_headline(snap),
             _render_conviction(snap, watchlist_entry),
         ),
-        # Catalyst data (date, options, reactions, news) collapsed
         _collapsible(
-            "Catalyst data — event date, options-implied, history, news",
+            "Earnings, news, and analyst activity",
             _catalyst_headline(snap),
             _render_catalyst(snap),
         ),
-        # Technical / informational panels — all collapsed by default
-        _collapsible("Regime — direction & volatility character", _regime_headline(snap), _render_regime(snap)),
-        _collapsible("Volatility forecast — how much the price typically swings", _volatility_headline(snap), _render_volatility(snap)),
-        _collapsible("Fair value — what the stock is fundamentally worth", _fair_value_headline(snap), _render_fair_value(snap)),
-        _collapsible("Math cross-check — do two independent forecasts agree?", _cross_check_headline(snap), _render_cross_check(snap)),
-        _collapsible("Tier sanity-check — does the math match the label?", _classifier_headline(snap), _render_classifier(snap)),
-        _collapsible("Data & sanity (step 1)", _data_headline(snap), _render_data(snap)),
-        _collapsible("Daily expected path — median MC scenario", "click to expand", _render_daily_path(snap)),
+        _collapsible(
+            "Market mood — is the stock trending or choppy?",
+            _regime_headline(snap),
+            _render_regime(snap),
+        ),
+        _collapsible(
+            "How wild are the daily moves?",
+            _volatility_headline(snap),
+            _render_volatility(snap),
+        ),
+        _collapsible(
+            "Is the price fair?",
+            _fair_value_headline(snap),
+            _render_fair_value(snap),
+        ),
+        _collapsible(
+            "Sanity check — do the two forecast methods agree?",
+            _cross_check_headline(snap),
+            _render_cross_check(snap),
+        ),
+        _collapsible(
+            "Is this stock behaving like its label?",
+            _classifier_headline(snap),
+            _render_classifier(snap),
+        ),
+        _collapsible(
+            "Is the data clean?",
+            _data_headline(snap),
+            _render_data(snap),
+        ),
     ]
 
     return f"""
@@ -1502,9 +1576,13 @@ def _render_cross_check(snap: dict) -> str:
     horizons = cc.get("horizons", {})
 
     # Compute headline: how many of the (horizon × metric) pairs agreed?
+    # The Layer-2 haircut in conviction.py is gated on P(target)
+    # disagreement specifically - P(stop) and EV mismatches are
+    # informational only. Headline must reflect that.
     total = 0
     agree_count = 0
     max_pp_delta = 0.0
+    p_target_disagrees = False
     for h in config.HORIZONS:
         d = horizons.get(h) or horizons.get(str(h))
         if not d:
@@ -1513,6 +1591,8 @@ def _render_cross_check(snap: dict) -> str:
             total += 1
             if d.get(f"agree_{metric}", False):
                 agree_count += 1
+            elif metric == "p_target":
+                p_target_disagrees = True
             delta = d.get(f"delta_{metric}", 0)
             scale_pp = 100 if metric != "ev" else 100
             max_pp_delta = max(max_pp_delta, abs(delta) * scale_pp)
@@ -1521,9 +1601,27 @@ def _render_cross_check(snap: dict) -> str:
     if all_agree:
         headline_class = "ok"
         headline_text = f"All {total} comparisons agree within tolerance — both methods independently arrive at the same answer. No Layer-2 haircut applied to conviction."
-    else:
+    elif p_target_disagrees:
         headline_class = "warn"
-        headline_text = f"{total - agree_count} of {total} comparison(s) outside tolerance (largest gap: {max_pp_delta:.1f}pp). Layer-2 confidence haircut applies to conviction."
+        headline_text = (
+            f"{total - agree_count} of {total} comparison(s) outside tolerance "
+            f"(largest gap: {max_pp_delta:.1f}pp), including P(target). "
+            f"Layer-2 confidence haircut applies to conviction."
+        )
+    else:
+        # P(stop) or EV outside tol but P(target) within - common case
+        # for our daily-close-monitoring setup where P(stop) has a known
+        # ~5-6pp discretization bias vs continuous-time PDE. The haircut
+        # does NOT fire in this case since conviction.py keys the haircut
+        # on P(target) delta only.
+        headline_class = "ok"
+        headline_text = (
+            f"{total - agree_count} of {total} comparison(s) outside tolerance "
+            f"(largest gap: {max_pp_delta:.1f}pp), but P(target) agrees on every horizon — "
+            f"no Layer-2 haircut applies to conviction. The disagreement is in P(stop) "
+            f"and/or EV only; these are informational and reflect the known daily-close-vs-"
+            f"continuous-time bias in MC's first-passage check."
+        )
 
     rows = []
     for h in config.HORIZONS:
@@ -1851,12 +1949,19 @@ def _fair_value_headline(snap: dict) -> str:
 
 
 def _cross_check_headline(snap: dict) -> str:
+    """Headline must honestly reflect whether the Layer-2 haircut
+    actually applies. The conviction module's mc_pde_disagreement
+    haircut only fires on P(target) disagreement - NOT on P(stop)
+    or EV. So "haircut applied" must check P(target) specifically;
+    a 1-of-6 outside tolerance count where the outlier is P(stop)
+    or EV is informational only."""
     cc = snap.get("cross_check")
     if not cc or cc.get("status") != "ok":
         return "pending"
     horizons = cc.get("horizons", {})
     total = 0
     agree = 0
+    p_target_disagrees = False
     for h in config.HORIZONS:
         d = horizons.get(h) or horizons.get(str(h))
         if not d:
@@ -1865,11 +1970,17 @@ def _cross_check_headline(snap: dict) -> str:
             total += 1
             if d.get(f"agree_{metric}", False):
                 agree += 1
+            elif metric == "p_target":
+                p_target_disagrees = True
     if total == 0:
         return "—"
     if agree == total:
         return f"all {total} comparisons agree — no haircut"
-    return f"{total - agree} of {total} outside tolerance — haircut applied"
+    n_out = total - agree
+    if p_target_disagrees:
+        return f"{n_out} of {total} outside tolerance — P(target) disagrees, haircut applies"
+    # P(stop) or EV outside tol but P(target) agrees -> no haircut
+    return f"{n_out} of {total} outside tolerance — P(target) agrees, no haircut"
 
 
 def _classifier_headline(snap: dict) -> str:
