@@ -323,7 +323,30 @@ def _build_historical_snapshot(
     earnings + filtered reactions. Missing fields (news, analyst, FV)
     are intentionally left empty/pending - graceful degradation
     elsewhere handles them.
+
+    CRITICAL: `full_profile` from FMP contains the CURRENT market price
+    (today's quote). For an as-of=2025-06-01 backtest, that price is
+    wildly wrong - it's today's price, not 2025-06-01's close. We
+    override profile.price with the close of the last truncated bar
+    (the as-of close), which is what `targets.derive` reads as the
+    "current price" for vol-scaled band derivation.
+
+    Without this override, all backtest target/stop levels would be
+    anchored to today's NVDA price (~$225) regardless of which
+    historical date we're evaluating. The verdict would be computed
+    against levels that have no relationship to the as-of market state,
+    and the comparison to realized outcomes would be meaningless.
     """
+    # Override profile.price with the as-of close (NOT today's quote).
+    historical_profile = dict(full_profile)
+    if truncated_prices:
+        last_close = (
+            truncated_prices[-1].get("adj_close")
+            or truncated_prices[-1].get("close")
+        )
+        if last_close:
+            historical_profile["price"] = float(last_close)
+
     snap: dict = {
         "ticker": ticker,
         "run_date": as_of.isoformat(),
@@ -331,14 +354,14 @@ def _build_historical_snapshot(
         "as_of": truncated_prices[-1]["date"] if truncated_prices else None,
         "data": {
             "status": "ok",
-            "profile": full_profile,
+            "profile": historical_profile,
             "sanity": {"overall": "ok"},
             "bar_count": len(truncated_prices),
         },
         "_price_data": {
             "ticker": ticker,
             "as_of": truncated_prices[-1]["date"] if truncated_prices else None,
-            "profile": full_profile,
+            "profile": historical_profile,
             "prices": truncated_prices,
             "sanity": {"overall": "ok"},
         },
@@ -468,10 +491,23 @@ def _compute_realized_outcome(
 ) -> dict | None:
     """Determine first-passage outcome from actual subsequent prices.
 
-    Daily-close first-passage (matches the trader's executional reality
-    on Trading 212 - they see closes, not intraday). No Brownian bridge
-    on realized outcomes; this is what actually happened, not a
-    simulation.
+    INTRADAY first-passage using daily HIGH/LOW bars. A Trading 212
+    stop-loss order triggers INTRADAY the moment price touches the
+    stop, not at the daily close. Similarly a take-profit limit fills
+    intraday when price touches the target. Using daily closes
+    UNDERCOUNTS hits the same way MC's close-only logic did before
+    the Brownian bridge correction - and we have the high/low data
+    right there in the FMP bars, we just need to use it.
+
+    Algorithm per day:
+      - if high >= target_price -> target was touched intraday
+      - if low <= stop_price -> stop was touched intraday
+      - both could happen same day (e.g. earnings gap up then sell-off);
+        we mark as "both" outcome, the trader's actual P&L depends on
+        which limit order filled first which we can't tell from daily
+        OHLC. Use midpoint as the realized return estimate.
+      - falls back to close-based detection if high/low missing
+        (some thinly-traded names, holidays).
 
     Returns None if there are fewer than `horizon_days` future prices
     available (can't evaluate the trade).
@@ -483,12 +519,19 @@ def _compute_realized_outcome(
     target_first_day = None
     stop_first_day = None
     for i, p in enumerate(window, start=1):
+        # Prefer intraday extrema; fall back to close when missing.
+        high = p.get("high")
+        low = p.get("low")
         close = p.get("adj_close") or p.get("close")
-        if close is None:
+        if high is None and low is None and close is None:
             continue
-        if close >= target_price and target_first_day is None:
+        # Intraday high reaches target -> stop-loss order would have
+        # filled at the target price (good outcome for the trader).
+        check_high = high if high is not None else close
+        check_low = low if low is not None else close
+        if check_high is not None and check_high >= target_price and target_first_day is None:
             target_first_day = i
-        if close <= stop_price and stop_first_day is None:
+        if check_low is not None and check_low <= stop_price and stop_first_day is None:
             stop_first_day = i
         if target_first_day is not None and stop_first_day is not None:
             break
