@@ -28,24 +28,31 @@ import yaml
 # ---------- run mode (production vs test) ----------
 #
 # Two modes:
-#   - production (default): outputs accumulate as "real" history. The
-#     Conviction Trajectory panel, backtest aggregates, and the
-#     published dashboard render all read from these paths. The
-#     nightly GitHub Actions cron runs in this mode (no env var set).
-#   - test: outputs go to data/test/ and a separate dashboard file.
-#     Production history stays untouched no matter how many times you
-#     iterate. Use this while developing or calibrating; switch to
-#     production only when you're ready to go live.
+#   - test (DEFAULT): outputs go to data/test/ and a separate dashboard
+#     file. Production history stays untouched no matter how many times
+#     you iterate. Test is the SAFE DEFAULT - it's harmless to run
+#     accidentally; production is opt-in.
+#   - production: outputs go to canonical paths and accumulate as
+#     "real" history. The Conviction Trajectory panel, backtest
+#     aggregates, and the published dashboard render all read from
+#     these paths. Activate ONLY when you're committing to the
+#     output being part of your audit trail.
 #
-# Activate test mode with:
-#     SGC_RUN_MODE=test python -m src.main
-#     SGC_RUN_MODE=test python -m src.backtest ...
+# Activate production mode with:
+#     SGC_RUN_MODE=production python -m src.main
+#     SGC_RUN_MODE=production python -m src.backtest ...
+#
+# Default behavior (no env var, or any value other than "production"):
+# test mode. This is intentional — accidentally running test mode is
+# zero-cost (files just go to data/test/); accidentally running
+# production mode pollutes the history that the trajectory panel
+# treats as authoritative.
 #
 # Caches (data/cache/*) are SHARED across modes - they're just FMP/
 # yfinance response caching for performance, the underlying data is
 # the same regardless of which mode wrote them.
 
-RUN_MODE = os.environ.get("SGC_RUN_MODE", "production").lower().strip()
+RUN_MODE = os.environ.get("SGC_RUN_MODE", "test").lower().strip()
 IS_TEST_MODE = RUN_MODE != "production"
 
 # ---------- repo paths (NOT calibratable; structural) ----------

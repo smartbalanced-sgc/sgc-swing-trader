@@ -1,22 +1,28 @@
-"""Engine entrypoint — invoked by the nightly cron.
+"""Engine entrypoint — invoked manually by the user.
 
 Orchestrates the 8-step pipeline (docs/V1_SPEC.md §2) for every ticker
 in the watchlist, runs the §4.2 measurement-driven tier classifier,
 writes per-ticker snapshots, and renders the dashboard.
 
-**Walking skeleton.** Pipeline steps that are not yet implemented are
-caught (NotImplementedError) and recorded in the snapshot with
-status='pending'. This is intentional — the engine runs end-to-end from
-day one, and the dashboard surfaces what's implemented vs what's still
-pending. As each pipeline step (regime, catalyst, volatility, fair
-value, MC, PDE, verdict) comes online its 'pending' slot in the
-snapshot is replaced by real output and its dashboard panel becomes
-live.
+**Manual-run model.** No cron; the user runs this on demand. Default
+mode is `test` (SGC_RUN_MODE=test, set automatically when env var is
+absent). Production mode (`SGC_RUN_MODE=production`) is opt-in -
+required only when the user explicitly wants the output to count
+toward production history.
 
 CLI:
-    python -m src.main                    # run full nightly pass
-    python -m src.main --ticker NVDA      # single-ticker dry run
-    python -m src.main --no-write         # don't write snapshot/dashboard files
+    python -m src.main                    # test-mode run, full watchlist
+    python -m src.main --ticker NVDA      # single-ticker
+    python -m src.main --no-write         # dry run, no files written
+    python -m src.main --refresh          # force fresh fetch (skip cache)
+    SGC_RUN_MODE=production python -m src.main   # real production run
+
+Recommended UK local times for daily production run:
+    7-8 AM UK    most convenient if reading the dashboard before market open
+    11 PM UK     captures full US trading day + after-hours news
+
+For intraday re-runs (price moved a lot, want fresh signal):
+    python -m src.main --refresh
 """
 
 from __future__ import annotations
@@ -273,8 +279,37 @@ def _load_watchlist() -> dict:
 # ---------- CLI ----------
 
 
+def _force_refresh_all_caches() -> None:
+    """Clear the per-ticker cache files so the next fetch hits FMP /
+    yfinance fresh. Triggered by `--refresh` on the CLI. We delete
+    the JSON files but keep the directory structure so subsequent
+    writes don't fail on missing dirs.
+
+    What gets cleared:
+      data/cache/{TICKER}.json           - FMP prices + profile
+      data/cache/catalyst/{TICKER}.json  - catalyst payload (6h TTL normally)
+      data/cache/short_interest/{TICKER}.json  - yfinance (24h TTL)
+      data/cache/fair_value/{TICKER}.json  - DCF + P/E + analyst PT (24h TTL)
+
+    What stays: data/snapshots/, data/backtest/, data/test/, anything
+    that's "output" rather than "cached input."
+    """
+    import shutil
+    cache_root = config.DATA_DIR / "cache"
+    if not cache_root.exists():
+        return
+    cleared = 0
+    for item in cache_root.rglob("*.json"):
+        try:
+            item.unlink()
+            cleared += 1
+        except OSError:
+            pass
+    print(f"--refresh: cleared {cleared} cache file(s) from {cache_root}")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run one nightly engine cycle.")
+    parser = argparse.ArgumentParser(description="Run one engine cycle.")
     parser.add_argument(
         "--ticker",
         action="append",
@@ -285,9 +320,21 @@ def main() -> int:
         action="store_true",
         help="dry run — don't write snapshots or dashboard to disk",
     )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help=(
+            "force fresh FMP fetches, ignoring the price-data cache TTL. "
+            "Use when something just happened (major news, big move) and you "
+            "want the absolute latest tick. Otherwise the default 4h cache "
+            "TTL handles intraday re-runs gracefully."
+        ),
+    )
     args = parser.parse_args()
 
     tickers = [t.upper() for t in args.ticker] if args.ticker else None
+    if args.refresh:
+        _force_refresh_all_caches()
     payload = run(tickers=tickers, write=not args.no_write)
 
     n_ok = sum(
