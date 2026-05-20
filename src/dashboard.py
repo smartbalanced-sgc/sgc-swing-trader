@@ -615,11 +615,28 @@ footer.band p { margin: 4px 0; }
 # ---------- shared constants ----------
 
 
-# Trading 212 invest URL for ticker symbols on the dashboard. Open in a
-# new tab. (NOTE: T212 URL conventions for non-US tickers will need
-# tweaking when we add European names — at that point we'll branch on
-# exchange/suffix.)
-T212_URL_TEMPLATE = "https://www.trading212.com/trading-instruments/invest/{ticker}"
+# Trading 212 invest URL pattern. The platform routes by
+# {TICKER}.{EXCHANGE} — US-listed instruments use `.US`, European
+# listings use the country/exchange code (NL, IT, GB, DE, …).
+# Empirically verified by the classic SGC dip engine; the prior swing
+# template `…/invest/{ticker}` (no suffix) 404s.
+#
+# Default: `.US` (we are US-only on Starter for now). Add non-US
+# overrides to T212_EXCHANGE_OVERRIDES as the universe expands.
+T212_URL_BASE = "https://www.trading212.com/trading-instruments/invest"
+T212_EXCHANGE_OVERRIDES = {
+    # ticker-as-stored-in-watchlist → T212 suffix
+    "ASML":   "ASML.NL",   # Amsterdam-listed (we model USD ADR; T212 routes EU)
+    "LDO.MI": "LDO.IT",    # Milan
+    "IGLN.L": "IGLN.GB",   # London — iShares Physical Gold ETC
+}
+
+
+def _t212_url(ticker: str) -> str:
+    """Build the Trading 212 invest URL for a ticker.
+    Defaults to `{TICKER}.US`; non-US tickers route via the override map."""
+    suffix = T212_EXCHANGE_OVERRIDES.get(ticker, f"{ticker}.US")
+    return f"{T212_URL_BASE}/{suffix}"
 
 
 VERDICT_GLOSSARY = [
@@ -906,7 +923,7 @@ def _render_verdict_glossary() -> str:
 def _ticker_link(ticker: str) -> str:
     """Hyperlink a ticker symbol to its Trading 212 invest page,
     opening in a new tab. Used only in per-ticker card headers."""
-    url = T212_URL_TEMPLATE.format(ticker=ticker)
+    url = _t212_url(ticker)
     return (
         f"<a class='t212-link mono' href='{html.escape(url)}' "
         f"target='_blank' rel='noopener noreferrer'>{html.escape(ticker)}</a>"
