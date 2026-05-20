@@ -34,7 +34,7 @@ from datetime import date, datetime, timezone
 
 import yaml
 
-from src import config, dashboard, snapshot, tier_classifier
+from src import config, dashboard, snapshot, tier_classifier, trajectory
 from src.pipeline import (
     analytic_verifier,
     catalyst,
@@ -89,6 +89,11 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
         "watchlist": watchlist,
         "tickers": ticker_snapshots,
         "errors": run_errors,
+        # Backtest panel: read the latest weekly backtest output file
+        # (written by the separate .github/workflows/backtest.yml cron).
+        # If no backtest has run yet, the field is absent and the panel
+        # renders a friendly "weekly backtest pending" message.
+        "backtest": _load_latest_backtest_summary(),
     }
 
     if write:
@@ -97,6 +102,62 @@ def run(tickers: list[str] | None = None, write: bool = True) -> dict:
         config.DASHBOARD_PATH.write_text(html)
 
     return payload
+
+
+# ---------- backtest summary loader ----------
+
+
+def _load_latest_backtest_summary() -> dict | None:
+    """Read the most recent weekly-backtest payload from
+    `data/backtest/*.json` (written by .github/workflows/backtest.yml)
+    and adapt it to the small shape `_render_backtest` consumes:
+
+        {"status": "ok", "hit_rate_pct", "hits", "total", "summary"}
+
+    Returns None when no backtest has run yet — the dashboard's
+    `_render_backtest` treats absent/pending the same way (friendly
+    "pending" panel)."""
+    import json
+
+    backtest_dir = config.BACKTEST_DIR
+    if not backtest_dir.exists():
+        return None
+    files = sorted(backtest_dir.glob("*.json"))
+    if not files:
+        return None
+    latest = files[-1]
+    try:
+        with latest.open() as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    metrics = payload.get("metrics") or {}
+    by_verdict = metrics.get("by_verdict") or {}
+    # "Hit" = the engine said ENTER (or HOLD) and the realized outcome
+    # was the target hit before the stop within the horizon. Sum across
+    # the actionable labels; SKIP/WAIT are correctly *not* hits to count.
+    actionable_labels = ("ENTER", "HOLD")
+    hits = sum(by_verdict.get(lbl, {}).get("target_hit_count", 0) for lbl in actionable_labels)
+    total = sum(by_verdict.get(lbl, {}).get("n", 0) for lbl in actionable_labels)
+    if total == 0:
+        return None
+    hit_rate_pct = (hits / total) * 100.0
+    run_window = payload.get("run_config") or {}
+    summary = (
+        f"Walk-forward backtest, {run_window.get('as_of_start', '?')} → "
+        f"{run_window.get('as_of_end', '?')}, sampled every "
+        f"{run_window.get('sample_every_days', '?')}d. Hit rate counts "
+        f"ENTER+HOLD verdicts where the target was hit before the stop."
+    )
+    return {
+        "status": "ok",
+        "hit_rate_pct": hit_rate_pct,
+        "hits": hits,
+        "total": total,
+        "summary": summary,
+        "run_at": run_window.get("run_at"),
+    }
 
 
 # ---------- per-ticker pipeline ----------
@@ -214,6 +275,18 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> dict:
         snap["thesis"] = snap["conviction"].pop("thesis", {"status": "pending"})
     else:
         snap["thesis"] = {"status": "pending", "reason": "verdict not ok"}
+
+    # Multi-night conviction trajectory. Reads up to the last 20
+    # snapshots from disk, extracts each night's 30d final_score,
+    # appends today's, and classifies the pattern as rising/stable/
+    # decaying/unstable. The dashboard's _render_trajectory consumes
+    # snap["trajectory"] directly. First production night returns a
+    # single-point series with a friendly message; meaningful
+    # classification kicks in at ~5 nights of accumulated history.
+    snap["trajectory"] = _run_safely(
+        "trajectory",
+        lambda: trajectory.build(ticker, snap),
+    )
 
     # Drop the private price-data pass-through before snapshot
     # serialization (keeps snapshot files small).

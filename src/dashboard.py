@@ -834,13 +834,17 @@ def _render_data_quality(payload: dict) -> str:
 def _render_backtest(payload: dict) -> str:
     backtest = payload.get("backtest")
     if backtest is None or backtest.get("status") == "pending":
+        # Pending until the first weekly run from .github/workflows/backtest.yml
+        # writes data/backtest/{date}.json. Main.py's _load_latest_backtest_summary
+        # adapts that file into the small {hit_rate_pct, hits, total, summary}
+        # shape this panel consumes.
         return """
 <details class='info-block'>
-  <summary>Backtest — <span class='pill pill-pending'>pending</span></summary>
-  <div class='body'>The backtest harness is deferred to v1.x. Once it ships, this panel will show hit rate per ticker, per-tier accuracy bands, and ROI vs naive baseline (mirroring v17 dip-engine format).</div>
+  <summary>Backtest — <span class='pill pill-pending'>pending first weekly run</span></summary>
+  <div class='body'>Populates after the first weekly backtest run (Saturdays 08:00 UTC). The walk-forward harness replays the engine across ~52 historical as-of dates per ticker and reports per-verdict hit rate, EV calibration delta, and P(target) calibration buckets. Trigger a one-off via the Actions tab → "SGC Swing Trader weekly backtest" → Run workflow if you want it sooner.</div>
 </details>
 """
-    # When the backtest is live this is where the v17-style hit-rate panel renders.
+    # Live render — main.py shaped this with hit_rate_pct, hits, total, summary.
     return f"""
 <details class='info-block' open>
   <summary>Backtest — hit rate {backtest['hit_rate_pct']:.0f}% ({backtest['hits']}/{backtest['total']})</summary>

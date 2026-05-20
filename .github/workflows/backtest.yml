@@ -1,0 +1,95 @@
+name: SGC Swing Trader weekly backtest
+
+# Runs the walk-forward backtest harness once a week. The nightly run
+# is too thin a slice to make per-verdict hit rates meaningful; the
+# backtest replays the engine across ~52 historical as-of dates per
+# ticker (1 year, sampled every 7 days) and feeds the aggregate
+# metrics into the dashboard's Backtest panel.
+#
+# Why separate from nightly: backtest is expensive — 21 tickers × ~52
+# dates × full Monte-Carlo + PDE per evaluation = ~60–90 minutes.
+# Running it nightly would burn Actions minutes and re-compute the
+# same window 5× without new information. Once a week on Saturday
+# captures the Friday close that just landed.
+#
+# Schedule: 8:00 UTC Saturday. US markets closed, no risk of overlap
+# with the nightly cron (which is 6:30 UTC Mon-Fri).
+
+on:
+  schedule:
+    - cron: '0 8 * * 6'    # 08:00 UTC Saturday
+  workflow_dispatch:        # manual trigger from Actions UI
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-backtest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # backtest is the expensive workflow; give it room
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run walk-forward backtest
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          SGC_RUN_MODE: production
+          PYTHONUNBUFFERED: '1'
+        # Defaults: 1 year of as-of dates ending 90 days ago (so the
+        # 60d horizon has realized outcomes), sampled every 7 days,
+        # all watchlist tickers. Output goes to data/backtest/{date}.json
+        # which the nightly engine then reads via _load_latest_backtest_summary.
+        run: python -m src.backtest
+
+      - name: Commit backtest results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/backtest/
+          if git diff --cached --quiet; then
+            echo "No backtest output to commit (run produced no new files)."
+            exit 0
+          fi
+          git commit -m "Weekly backtest: $(date -u +'%Y-%m-%d')"
+          # Same rebase-retry as nightly to handle mid-run watchlist
+          # mutations from claude.ai/code sessions.
+          for attempt in 1 2 3 4; do
+            git pull --rebase origin main && git push origin main && break
+            echo "Push attempt $attempt failed; retrying after $((attempt * attempt))s..."
+            sleep $((attempt * attempt))
+          done
+
+      - name: Summarize run in workflow output
+        if: always()
+        run: |
+          latest=$(ls -t data/backtest/*.json 2>/dev/null | head -1)
+          if [ -n "$latest" ]; then
+            echo "## Weekly backtest summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Latest output: \`$latest\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Trades evaluated: $(python -c "import json; print(json.load(open('$latest'))['summary']['trades_evaluated'])")" >> $GITHUB_STEP_SUMMARY
+            echo "- Run window: $(python -c "import json; c=json.load(open('$latest'))['run_config']; print(c['as_of_start'], '→', c['as_of_end'])")" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Weekly backtest FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No \`data/backtest/*.json\` output produced. Inspect the run logs above." >> $GITHUB_STEP_SUMMARY
+          fi

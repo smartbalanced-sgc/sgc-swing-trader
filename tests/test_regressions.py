@@ -297,6 +297,68 @@ class TestFMPRetryRespectsPermanentErrors(unittest.TestCase):
             "429 (rate limit) MUST be retryable")
 
 
+class TestTrajectoryClassification(unittest.TestCase):
+    """Conviction trajectory module: classifies multi-night score
+    sequences as rising / stable / decaying / unstable. Pinning the
+    boundary cases so threshold tuning is visible if it changes."""
+
+    def test_rising_sequence_classified_rising(self):
+        from src.trajectory import _classify
+        annotation, _ = _classify([0.05, 0.08, 0.12, 0.15, 0.18])
+        self.assertEqual(annotation, "rising")
+
+    def test_decaying_sequence_classified_decaying(self):
+        from src.trajectory import _classify
+        annotation, _ = _classify([0.30, 0.25, 0.20, 0.18, 0.15])
+        self.assertEqual(annotation, "decaying")
+
+    def test_stable_within_threshold_classified_stable(self):
+        from src.trajectory import _classify
+        # drift < ±0.05 → stable even with day-to-day jiggle
+        annotation, _ = _classify([0.15, 0.16, 0.15, 0.14, 0.16])
+        self.assertEqual(annotation, "stable")
+
+    def test_three_direction_flips_classified_unstable(self):
+        from src.trajectory import _classify
+        # Up, down, up, down, up = 3 sign flips in last 5 nights → unstable
+        annotation, _ = _classify([0.15, 0.25, 0.10, 0.22, 0.08, 0.20])
+        self.assertEqual(annotation, "unstable")
+
+    def test_first_night_returns_stable_with_friendly_message(self):
+        from src.trajectory import _classify
+        # Single-night case must not crash and must produce a useful message
+        # so first production run renders cleanly instead of pending.
+        annotation, summary = _classify([0.15])
+        self.assertEqual(annotation, "stable")
+        self.assertIn("First production night", summary)
+
+    def test_extract_avg_score_averages_across_users(self):
+        from src.trajectory import _extract_30d_avg_score
+        snap = {
+            "conviction": {"status": "ok", "horizons": {
+                30: {
+                    "aidy":  {"breakdown": {"final_score": 0.10}},
+                    "jesse": {"breakdown": {"final_score": 0.20}},
+                },
+            }},
+        }
+        self.assertAlmostEqual(_extract_30d_avg_score(snap), 0.15)
+
+    def test_extract_avg_score_handles_int_keyed_and_string_keyed_horizons(self):
+        # snapshot.write/load round-trips through JSON which converts int
+        # dict keys to strings. The extractor must accept both.
+        from src.trajectory import _extract_30d_avg_score
+        snap_int = {"conviction": {"status": "ok", "horizons": {30: {"aidy": {"breakdown": {"final_score": 0.10}}}}}}
+        snap_str = {"conviction": {"status": "ok", "horizons": {"30": {"aidy": {"breakdown": {"final_score": 0.10}}}}}}
+        self.assertEqual(_extract_30d_avg_score(snap_int), 0.10)
+        self.assertEqual(_extract_30d_avg_score(snap_str), 0.10)
+
+    def test_extract_avg_score_returns_none_when_conviction_pending(self):
+        from src.trajectory import _extract_30d_avg_score
+        snap = {"conviction": {"status": "pending"}}
+        self.assertIsNone(_extract_30d_avg_score(snap))
+
+
 class TestDataDepthHaircut(unittest.TestCase):
     """Layer-2 data-depth haircut surfaces the cost of thin price history
     explicitly in the conviction breakdown rather than letting it leak
