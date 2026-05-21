@@ -121,6 +121,24 @@ header.band h1::before {
   vertical-align: middle;
   border-radius: 2px;
 }
+header.band .title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+header.band .run-now {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--gold); color: #2a1908;
+  padding: 7px 14px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  margin-right: 18px;
+}
+header.band .run-now:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
 header.band .subtitle { color: #d6c9a8; font-size: 13px; padding-left: 18px; }
 header.band .meta {
   display: flex; flex-wrap: wrap; gap: 8px 24px;
@@ -411,6 +429,137 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .price-levels .pl-zone.target .pl-icon { color: var(--accent); }
 .price-levels .pl-user-row { font-size: 11.5px; color: var(--muted); padding-left: 36px; margin-top: 4px; line-height: 1.5; }
 
+/* ---------- swing-mode panel (planned dip→rally trade) ---------- */
+.swing-mode { background: #fdf7f1; border: 1px solid #d4a574; border-radius: 6px; padding: 14px 16px; margin: 14px 0; }
+.swing-mode .sm-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 8px; }
+.swing-mode .sm-head .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #7c3a0c; }
+.swing-mode .sm-head .sub { font-size: 11.5px; color: var(--text-soft); }
+.swing-mode .sm-explainer { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.55; }
+.swing-mode .sm-horizon { background: white; border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; margin: 10px 0; }
+.swing-mode .sm-horizon.actionable { border-left: 4px solid var(--ok); }
+.swing-mode .sm-horizon.no-swing { border-left: 4px solid #cbd5e1; }
+.swing-mode .sm-hhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.swing-mode .sm-hlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); }
+.swing-mode .sm-verdict.actionable { color: var(--ok); font-size: 12.5px; }
+.swing-mode .sm-verdict.no-swing { color: var(--muted); font-size: 12.5px; }
+.swing-mode .sm-vsub { font-size: 11.5px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.45; }
+.swing-mode .sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+.swing-mode .sm-cell { padding: 6px 8px; border-left: 2px solid #e2e8f0; }
+.swing-mode .sm-cell .sm-key { font-size: 11px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.swing-mode .sm-cell .sm-val { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0; }
+.swing-mode .sm-cell .sm-meta { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.swing-mode .sm-stop { margin-top: 12px; padding: 8px 10px; background: #fafaf9; border-radius: 4px; font-size: 12px; color: var(--text-soft); line-height: 1.55; }
+.swing-mode .sm-stop .sm-stopkey { font-weight: 600; color: var(--text); margin-right: 4px; }
+.swing-mode .sm-stop .sm-cross { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.swing-mode .sm-stop .warn { color: #b45309; }
+
+/* ---------- 60-day horizon collapse — both Action and Swing panels ---------- */
+/* Secondary horizon hides its detail by default; summary shows verdict
+   as a full-colour pill so the user can scan the at-a-glance state. */
+
+/* shared collapse cosmetics */
+details.sm-collapse, details.action-horizon.ah-collapse {
+  border-radius: 6px; margin: 10px 0;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.12s ease;
+}
+details.sm-collapse[open], details.action-horizon.ah-collapse[open] {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+/* the summary bar — coloured when closed, faded when open */
+details.sm-collapse > summary,
+details.action-horizon.ah-collapse > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  user-select: none;
+}
+details.sm-collapse > summary::-webkit-details-marker,
+details.action-horizon.ah-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+/* chevron rotates when open */
+.sm-cchev, .ah-cchev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--text-soft); font-size: 11px;
+}
+details[open] > summary > .sm-cchev,
+details[open] > summary > .ah-cchev {
+  transform: rotate(90deg);
+}
+.sm-chint, .ah-chint {
+  font-size: 11px; color: var(--muted); margin-left: auto;
+  font-style: italic;
+}
+details[open] > summary > .sm-chint,
+details[open] > summary > .ah-chint {
+  visibility: hidden;
+}
+.ah-extra {
+  font-size: 11px; color: var(--text-soft);
+  background: white; padding: 2px 7px; border-radius: 10px;
+  border: 1px solid var(--border);
+}
+/* swing-mode 60d collapse — copper accent */
+details.sm-collapse {
+  background: #fdf7f1;
+  border-color: #d4a574;
+}
+details.sm-collapse > summary { background: #fdf7f1; }
+details.sm-collapse.actionable > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, #fdf7f1 60%);
+  border-bottom: 2px solid var(--ok);
+}
+details.sm-collapse.no-swing > summary {
+  background: linear-gradient(90deg, #f3f4f6 0%, #fdf7f1 60%);
+}
+.sm-clabel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+.sm-cverdict {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 4px;
+}
+.sm-cverdict.actionable { background: var(--ok); color: white; }
+.sm-cverdict.no-swing { background: #cbd5e1; color: #475569; }
+.sm-cbody { padding: 0 14px 14px; background: white; }
+/* action 60d collapse — verdict colour band */
+details.action-horizon.ah-collapse { background: white; }
+.ah-csum .ah-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+details.action-horizon.verdict-bg-ENTER > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, white 70%);
+  border-bottom: 2px solid #15803d;
+}
+details.action-horizon.verdict-bg-HOLD > summary {
+  background: linear-gradient(90deg, #dbeafe 0%, white 70%);
+  border-bottom: 2px solid #1e40af;
+}
+details.action-horizon.verdict-bg-WAIT > summary {
+  background: linear-gradient(90deg, #fef3c7 0%, white 70%);
+  border-bottom: 2px solid #92400e;
+}
+details.action-horizon.verdict-bg-TRIM > summary {
+  background: linear-gradient(90deg, #fed7aa 0%, white 70%);
+  border-bottom: 2px solid #9a3412;
+}
+details.action-horizon.verdict-bg-SKIP > summary {
+  background: linear-gradient(90deg, #fee2e2 0%, white 70%);
+  border-bottom: 2px solid #991b1b;
+}
+details.action-horizon.verdict-bg-EXIT > summary {
+  background: linear-gradient(90deg, #fecaca 0%, white 70%);
+  border-bottom: 2px solid #7f1d1d;
+}
+.ah-cbody { padding: 14px; }
+
 /* ---------- plain-English explainer blocks (top of technical panels) ---------- */
 .what-it-is { background: #fafaf9; border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-soft); line-height: 1.55; border-radius: 0 4px 4px 0; }
 .what-it-is .label { font-weight: 600; color: var(--text); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
@@ -681,12 +830,13 @@ footer.band p { margin: 4px 0; }
 
 <header class="band">
   <div class="wrap">
-    <h1>SGC Swing Trader</h1>
+    <div class="title-row">
+      <h1>SGC Swing Trader</h1>
+      <a class="run-now" href="https://github.com/smartbalanced-sgc/sgc-swing-trader/actions/workflows/nightly.yml" target="_blank" rel="noopener" title="Opens the GitHub Actions page — click 'Run workflow' there to trigger an on-demand run">▶ Run now</a>
+    </div>
     <div class="subtitle">Conviction + timing for 21 ticker(s) across 30d, 60d horizons. Per-user verdicts for Aidy and Jesse.</div>
     <div class="meta">
-      <span>Run date: <strong>2026-05-21</strong></span>
-      <span>Started: 2026-05-21T11:04:25+00:00</span>
-      <span>Finished: 2026-05-21T11:05:45+00:00</span>
+      <span>Run: <strong>2026-05-21 12:26 BST</strong></span>
       <span>Market: <strong>—</strong> (VIX —)</span>
       <span title='Claude API cost — populated once LLM calls are wired into the pipeline.'>Run cost: <strong>—</strong> <em style='color: var(--muted);'>(pending)</em></span>
       
@@ -819,11 +969,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>PL</strong> drops to <strong>$40.12</strong> (-5.9% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-05-22 -&gt; 2026-06-11. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$40.12</strong> (-5.9% from now), but the fair-value veto would <strong>still fire</strong> there (+2.11σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -832,9 +982,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -847,14 +1003,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>PL</strong> drops to <strong>$38.92</strong> (-8.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-05-29 -&gt; 2026-06-18. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>PL</strong> drops to <strong>$38.92</strong> (-8.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-05-29 -&gt; 2026-06-18. Consider setting a buy-limit order at this level. Note: at this level the fair-value veto clears (+1.92σ, below the 2.0σ veto floor); <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>R:R is 1.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$40.12</div>
+      <div class='sm-meta'>+5.9% vs current $42.66 · median 6 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$53.43</div>
+      <div class='sm-meta'>+25.2% vs current · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+33.2%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>36%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>34%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$29.72</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $24.27 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$38.92</div>
+      <div class='sm-meta'>+8.8% vs current $42.66 · median 11 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$57.04</div>
+      <div class='sm-meta'>+33.7% vs current · median 27 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+46.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>30%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>40%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$20.74</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $18.23 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -1012,7 +1289,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.52σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.52σ vs FV range; at projected dip +2.11σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -1107,7 +1384,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.52σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.52σ vs FV range; at projected dip +1.92σ — FV veto would CLEAR at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -1415,7 +1692,7 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>ENGN</strong> drops to <strong>$1.02</strong> (-36.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-12 -&gt; 2026-07-06. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>ENGN</strong> drops to <strong>$1.02</strong> (-36.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-12 -&gt; 2026-07-06. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity, Regime</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
@@ -1424,9 +1701,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -1439,14 +1722,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>ENGN</strong> drops to <strong>$0.69</strong> (-56.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-22 -&gt; 2026-08-11. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>ENGN</strong> drops to <strong>$0.69</strong> (-56.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-22 -&gt; 2026-08-11. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity, Regime</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 9% (need ≥ 30%)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$1.02</div>
+      <div class='sm-meta'>+36.8% vs current $1.61 · median 21 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$1.85</div>
+      <div class='sm-meta'>+14.6% vs current · median 8 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+81.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>3.2×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>9%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>61%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$0.76</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $0.19 — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong></span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 5% (need ≥ 30%)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$0.69</div>
+      <div class='sm-meta'>+56.8% vs current $1.61 · median 47 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$1.94</div>
+      <div class='sm-meta'>+20.4% vs current · median 13 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+179.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>3.4×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>5%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>65%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$0.33</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $0.06 — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong></span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -2016,9 +2420,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -2031,14 +2441,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>VELO</strong> drops to <strong>$12.67</strong> (-31.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-10 -&gt; 2026-07-30. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>VELO</strong> drops to <strong>$12.67</strong> (-31.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-10 -&gt; 2026-07-30. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 13% (need ≥ 30%); R:R is 1.8× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$14.78</div>
+      <div class='sm-meta'>+20.1% vs current $18.51 · median 18 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$20.78</div>
+      <div class='sm-meta'>+12.3% vs current · median 11 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+40.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.8×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>13%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>57%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$11.39</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $5.44 — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong></span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 13% (need ≥ 30%); R:R is 1.5× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$12.67</div>
+      <div class='sm-meta'>+31.6% vs current $18.51 · median 39 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$22.28</div>
+      <div class='sm-meta'>+20.4% vs current · median 23 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+75.9%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.5×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>13%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>57%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$6.30</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $3.01 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -2608,9 +3139,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -2623,14 +3160,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>LWLG</strong> drops to <strong>$8.69</strong> (-25.7% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-09 -&gt; 2026-07-29. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>LWLG</strong> drops to <strong>$8.69</strong> (-25.7% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-09 -&gt; 2026-07-29. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 15% (need ≥ 30%); R:R is 1.6× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$9.79</div>
+      <div class='sm-meta'>+16.2% vs current $11.69 · median 17 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$12.99</div>
+      <div class='sm-meta'>+11.2% vs current · median 11 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+32.7%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.6×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>15%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>55%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$7.74</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $4.31 — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong></span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 12% (need ≥ 30%); R:R is 1.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$8.69</div>
+      <div class='sm-meta'>+25.7% vs current $11.69 · median 38 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$13.63</div>
+      <div class='sm-meta'>+16.6% vs current · median 21 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+56.9%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>12%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>58%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$5.00</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $2.66 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -3187,11 +3845,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MRAM</strong> drops to <strong>$25.01</strong> (-13.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-08 -&gt; 2026-06-29. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$25.01</strong> (-13.6% from now), but the fair-value veto would <strong>still fire</strong> there (+9.47σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -3200,9 +3858,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -3211,18 +3875,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MRAM</strong> drops to <strong>$22.43</strong> (-22.5% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-10 -&gt; 2026-07-30. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$22.43</strong> (-22.5% from now), but the fair-value veto would <strong>still fire</strong> there (+8.20σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 16% (need ≥ 30%); R:R is 1.4× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$25.01</div>
+      <div class='sm-meta'>+13.6% vs current $28.94 · median 17 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$31.85</div>
+      <div class='sm-meta'>+10.0% vs current · median 12 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+27.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.4×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>16%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>54%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$20.08</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $12.27 — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong></span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 14% (need ≥ 30%); R:R is 1.2× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$22.43</div>
+      <div class='sm-meta'>+22.5% vs current $28.94 · median 39 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$33.66</div>
+      <div class='sm-meta'>+16.3% vs current · median 25 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+50.1%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.2×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>14%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>56%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$12.95</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $7.80 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -3380,7 +4165,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+11.40σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+11.40σ vs FV range; at projected dip +9.47σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -3475,7 +4260,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+11.40σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+11.40σ vs FV range; at projected dip +8.20σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -3783,7 +4568,7 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>RKLB</strong> drops to <strong>$120.77</strong> (-10.1% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-05 -&gt; 2026-06-26. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>RKLB</strong> drops to <strong>$120.77</strong> (-10.1% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-05 -&gt; 2026-06-26. Consider setting a buy-limit order at this level. Note: at this level the fair-value veto clears (+1.47σ, below the 2.0σ veto floor).</div>
   </div>
 </div>
 
@@ -3792,9 +4577,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -3807,14 +4598,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>RKLB</strong> drops to <strong>$112.21</strong> (-16.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-07 -&gt; 2026-07-27. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>RKLB</strong> drops to <strong>$112.21</strong> (-16.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-07 -&gt; 2026-07-27. Consider setting a buy-limit order at this level. Note: at this level the fair-value veto clears (+0.89σ, below the 2.0σ veto floor); <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 17% (need ≥ 30%); R:R is 1.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$120.77</div>
+      <div class='sm-meta'>+10.1% vs current $134.28 · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$145.51</div>
+      <div class='sm-meta'>+8.4% vs current · median 13 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+20.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>17%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>53%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$101.26</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $70.03 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 18% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$112.21</div>
+      <div class='sm-meta'>+16.4% vs current $134.28 · median 36 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$154.31</div>
+      <div class='sm-meta'>+14.9% vs current · median 32 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+37.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>18%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>52%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$68.51</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $49.27 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -3972,7 +4884,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.38σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.38σ vs FV range; at projected dip +1.47σ — FV veto would CLEAR at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -4067,7 +4979,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.38σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.38σ vs FV range; at projected dip +0.89σ — FV veto would CLEAR at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -4384,9 +5296,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -4399,14 +5317,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>LITE</strong> drops to <strong>$731.05</strong> (-15.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-06 -&gt; 2026-07-24. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>LITE</strong> drops to <strong>$731.05</strong> (-15.8% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-06 -&gt; 2026-07-24. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 17% (need ≥ 30%); R:R is 1.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$783.15</div>
+      <div class='sm-meta'>+9.8% vs current $868.07 · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$940.63</div>
+      <div class='sm-meta'>+8.4% vs current · median 13 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+20.1%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>17%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>53%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$657.35</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $463.41 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 18% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$731.05</div>
+      <div class='sm-meta'>+15.8% vs current $868.07 · median 35 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$996.04</div>
+      <div class='sm-meta'>+14.7% vs current · median 31 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+36.2%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>18%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>52%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$460.88</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $331.53 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -4976,9 +6015,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -4991,14 +6036,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>ASTS</strong> drops to <strong>$71.98</strong> (-19.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-13 -&gt; 2026-07-31. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>ASTS</strong> drops to <strong>$71.98</strong> (-19.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-13 -&gt; 2026-07-31. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 15% (need ≥ 30%); R:R is 1.4× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$79.12</div>
+      <div class='sm-meta'>+11.7% vs current $89.58 · median 17 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$96.58</div>
+      <div class='sm-meta'>+7.8% vs current · median 12 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+22.1%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.4×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>15%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>55%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$66.55</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $44.43 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 14% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$71.98</div>
+      <div class='sm-meta'>+19.6% vs current $89.58 · median 40 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$101.10</div>
+      <div class='sm-meta'>+12.9% vs current · median 25 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+40.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>14%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>56%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$45.55</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $29.08 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -5559,7 +6725,7 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MU</strong> drops to <strong>$676.59</strong> (-7.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-05 -&gt; 2026-06-26. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>MU</strong> drops to <strong>$676.59</strong> (-7.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-05 -&gt; 2026-06-26. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
@@ -5568,9 +6734,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -5583,14 +6755,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MU</strong> drops to <strong>$651.55</strong> (-11.0% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-24 -&gt; 2026-07-15. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>MU</strong> drops to <strong>$651.55</strong> (-11.0% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-24 -&gt; 2026-07-15. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 20% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$676.59</div>
+      <div class='sm-meta'>+7.6% vs current $731.99 · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$788.14</div>
+      <div class='sm-meta'>+7.7% vs current · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+16.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>20%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>50%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$578.74</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $432.93 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 20% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$651.55</div>
+      <div class='sm-meta'>+11.0% vs current $731.99 · median 28 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$816.47</div>
+      <div class='sm-meta'>+11.5% vs current · median 26 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+25.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>20%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>50%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$485.13</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $356.67 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -6147,11 +7440,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>INTC</strong> drops to <strong>$109.41</strong> (-8.0% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-05 -&gt; 2026-06-26. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$109.41</strong> (-8.0% from now), but the fair-value veto would <strong>still fire</strong> there (+2.78σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -6160,9 +7453,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -6171,18 +7470,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>INTC</strong> drops to <strong>$102.11</strong> (-14.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-09 -&gt; 2026-07-29. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$102.11</strong> (-14.2% from now), but the fair-value veto would <strong>still fire</strong> there (+2.09σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 18% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$109.41</div>
+      <div class='sm-meta'>+8.0% vs current $118.96 · median 16 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$127.49</div>
+      <div class='sm-meta'>+7.2% vs current · median 13 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+16.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>18%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>52%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$93.68</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $70.51 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 17% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$102.11</div>
+      <div class='sm-meta'>+14.2% vs current $118.96 · median 38 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$133.77</div>
+      <div class='sm-meta'>+12.5% vs current · median 30 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+31.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>17%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>53%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$69.88</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $49.59 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -6340,7 +7760,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+3.69σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+3.69σ vs FV range; at projected dip +2.78σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -6435,7 +7855,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+3.69σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+3.69σ vs FV range; at projected dip +2.09σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -6752,9 +8172,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -6767,14 +8193,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>SATS</strong> drops to <strong>$124.18</strong> (-12.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-02 -&gt; 2026-07-23. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>SATS</strong> drops to <strong>$124.18</strong> (-12.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-02 -&gt; 2026-07-23. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 18% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$130.99</div>
+      <div class='sm-meta'>+7.6% vs current $141.80 · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$151.86</div>
+      <div class='sm-meta'>+7.1% vs current · median 14 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+15.9%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>18%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>52%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$112.82</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $85.99 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 18% (need ≥ 30%); R:R is 0.9× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$124.18</div>
+      <div class='sm-meta'>+12.4% vs current $141.80 · median 34 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$159.02</div>
+      <div class='sm-meta'>+12.1% vs current · median 30 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+28.1%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.9×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>18%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>52%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$85.43</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $64.84 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -7331,11 +8878,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>GHM</strong> drops to <strong>$91.95</strong> (-4.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-05-27 -&gt; 2026-06-16. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$91.95</strong> (-4.2% from now), but the fair-value veto would <strong>still fire</strong> there (+4.06σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -7344,9 +8891,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -7355,18 +8908,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>GHM</strong> drops to <strong>$90.15</strong> (-6.1% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-15 -&gt; 2026-07-07. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$90.15</strong> (-6.1% from now), but the fair-value veto would <strong>still fire</strong> there (+3.94σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 11.3% (need ≥ 15.0%); sequence prob is 26% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$91.95</div>
+      <div class='sm-meta'>+4.2% vs current $95.98 · median 9 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$102.31</div>
+      <div class='sm-meta'>+6.6% vs current · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+11.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>26%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>44%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$82.70</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $66.07 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 24% (need ≥ 30%); R:R is 0.9× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$90.15</div>
+      <div class='sm-meta'>+6.1% vs current $95.98 · median 22 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$105.46</div>
+      <div class='sm-meta'>+9.9% vs current · median 29 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+17.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.9×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>24%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>46%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$73.09</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $58.77 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -7524,7 +9198,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+4.34σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+4.34σ vs FV range; at projected dip +4.06σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -7619,7 +9293,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+4.34σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+4.34σ vs FV range; at projected dip +3.94σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -7936,9 +9610,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -7951,14 +9631,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>IPGP</strong> drops to <strong>$103.78</strong> (-14.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-07 -&gt; 2026-07-27. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>IPGP</strong> drops to <strong>$103.78</strong> (-14.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-07 -&gt; 2026-07-27. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 16% (need ≥ 30%); R:R is 1.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$110.37</div>
+      <div class='sm-meta'>+8.7% vs current $120.91 · median 17 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$128.65</div>
+      <div class='sm-meta'>+6.4% vs current · median 12 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+16.6%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>16%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>54%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$96.27</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $70.92 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 17% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$103.78</div>
+      <div class='sm-meta'>+14.2% vs current $120.91 · median 36 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$134.38</div>
+      <div class='sm-meta'>+11.1% vs current · median 30 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+29.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>17%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>53%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$71.80</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $53.15 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -8528,9 +10329,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -8543,14 +10350,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>GLW</strong> drops to <strong>$161.86</strong> (-10.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-02 -&gt; 2026-07-23. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>GLW</strong> drops to <strong>$161.86</strong> (-10.4% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-02 -&gt; 2026-07-23. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 13.3% (need ≥ 15.0%); sequence prob is 19% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$169.36</div>
+      <div class='sm-meta'>+6.3% vs current $180.69 · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$191.93</div>
+      <div class='sm-meta'>+6.2% vs current · median 14 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+13.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>19%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>51%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$148.50</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $118.26 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 20% (need ≥ 30%); R:R is 0.8× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$161.86</div>
+      <div class='sm-meta'>+10.4% vs current $180.69 · median 34 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$200.62</div>
+      <div class='sm-meta'>+11.0% vs current · median 33 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+24.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.8×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>20%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>50%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$115.77</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $92.43 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -8848,7 +10776,7 @@ footer.band p { margin: 4px 0; }
   </table>
 </div>
 
-  <div class='cat-section-title'>Recent news (3 headlines):</div><ul class='news-bullets'><li>2026-05-20 - 247wallst.com: Nvidia Might Have Just Revealed the AI Sleeper Stock That Investors Missed</li><li>2026-05-20 - zacks.com: Here&#x27;s Why Corning (GLW) is a Strong Growth Stock</li><li>2026-05-20 - reuters.com: Giant US power merger bets on AI build-out, but may hinge on power bills</li></ul>
+  <div class='cat-section-title'>Recent news (3 headlines):</div><ul class='news-bullets'><li>2026-05-21 - seekingalpha.com: This Is Why Corning&#x27;s Stock Keeps Springing To The Upside</li><li>2026-05-20 - 247wallst.com: Nvidia Might Have Just Revealed the AI Sleeper Stock That Investors Missed</li><li>2026-05-20 - zacks.com: Here&#x27;s Why Corning (GLW) is a Strong Growth Stock</li></ul>
 </div>
 
   </div>
@@ -9107,11 +11035,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>STX</strong> drops to <strong>$705.84</strong> (-6.0% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-04 -&gt; 2026-06-25. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$705.84</strong> (-6.0% from now), but the fair-value veto would <strong>still fire</strong> there (+2.37σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -9120,9 +11048,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -9131,18 +11065,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>STX</strong> drops to <strong>$679.86</strong> (-9.5% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-26 -&gt; 2026-07-17. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$679.86</strong> (-9.5% from now), but the fair-value veto would <strong>still fire</strong> there (+2.20σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 13.0% (need ≥ 15.0%); sequence prob is 20% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$705.84</div>
+      <div class='sm-meta'>+6.0% vs current $751.07 · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$797.32</div>
+      <div class='sm-meta'>+6.2% vs current · median 14 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+13.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>20%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>50%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$618.65</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $497.75 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 26% (need ≥ 30%); R:R is 0.8× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$679.86</div>
+      <div class='sm-meta'>+9.5% vs current $751.07 · median 30 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$853.17</div>
+      <div class='sm-meta'>+13.6% vs current · median 48 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+25.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.8×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>26%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>44%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$460.48</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $403.83 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -9300,7 +11355,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.66σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.66σ vs FV range; at projected dip +2.37σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -9395,7 +11450,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.66σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.66σ vs FV range; at projected dip +2.20σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -9712,9 +11767,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -9727,14 +11788,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>AMAT</strong> drops to <strong>$391.91</strong> (-8.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-06 -&gt; 2026-07-24. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>AMAT</strong> drops to <strong>$391.91</strong> (-8.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-06 -&gt; 2026-07-24. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 10.3% (need ≥ 15.0%); sequence prob is 21% (need ≥ 30%); R:R is 1.1× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$406.78</div>
+      <div class='sm-meta'>+4.7% vs current $426.85 · median 14 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$448.74</div>
+      <div class='sm-meta'>+5.1% vs current · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+10.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.1×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>21%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>49%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$366.87</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $309.89 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 20% (need ≥ 30%); R:R is 0.7× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$391.91</div>
+      <div class='sm-meta'>+8.2% vs current $426.85 · median 35 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$465.43</div>
+      <div class='sm-meta'>+9.0% vs current · median 35 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+18.8%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.7×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>20%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>50%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$291.76</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $250.42 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -10304,9 +12486,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -10319,14 +12507,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>NOW</strong> drops to <strong>$88.25</strong> (-14.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-16 -&gt; 2026-08-05. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>NOW</strong> drops to <strong>$88.25</strong> (-14.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-16 -&gt; 2026-08-05. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 12.1% (need ≥ 15.0%); sequence prob is 14% (need ≥ 30%); R:R is 1.4× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$95.92</div>
+      <div class='sm-meta'>+7.1% vs current $103.30 · median 18 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$107.53</div>
+      <div class='sm-meta'>+4.1% vs current · median 11 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+12.1%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.4×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>14%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>56%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$87.68</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $68.75 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>sequence prob is 8% (need ≥ 30%); R:R is 1.5× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$88.25</div>
+      <div class='sm-meta'>+14.6% vs current $103.30 · median 43 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$109.61</div>
+      <div class='sm-meta'>+6.1% vs current · median 20 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+24.2%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.5×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>8%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>62%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$74.45</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $48.92 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -10883,11 +13192,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>UNH</strong> drops to <strong>$370.55</strong> (-3.3% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-03 -&gt; 2026-06-24. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$370.55</strong> (-3.3% from now), but the fair-value veto would <strong>still fire</strong> there (+2.33σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -10896,9 +13205,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -10907,18 +13222,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>ENTER → SKIP — price ≥ 2.0σ above fair value</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>UNH</strong> drops to <strong>$363.11</strong> (-5.3% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-25 -&gt; 2026-07-16. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$363.11</strong> (-5.3% from now), but the fair-value veto would <strong>still fire</strong> there (+2.16σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 7.5% (need ≥ 15.0%); sequence prob is 22% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$370.55</div>
+      <div class='sm-meta'>+3.3% vs current $383.30 · median 14 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$398.21</div>
+      <div class='sm-meta'>+3.9% vs current · median 15 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+7.5%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>22%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>48%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$342.37</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $303.57 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 13.0% (need ≥ 15.0%); sequence prob is 23% (need ≥ 30%); R:R is 0.7× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$363.11</div>
+      <div class='sm-meta'>+5.3% vs current $383.30 · median 29 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$410.47</div>
+      <div class='sm-meta'>+7.1% vs current · median 37 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+13.0%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.7×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>23%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>47%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$295.10</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $269.11 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -11076,7 +13512,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.63σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.63σ vs FV range; at projected dip +2.33σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -11171,7 +13607,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.63σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+2.63σ vs FV range; at projected dip +2.16σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -11488,9 +13924,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -11503,14 +13945,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>D</strong> drops to <strong>$65.75</strong> (-2.9% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-23 -&gt; 2026-07-14. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>D</strong> drops to <strong>$65.75</strong> (-2.9% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-23 -&gt; 2026-07-14. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>dip is only 1.7% below current (need ≥ 3.0%); rally is only 2.8% above current (need ≥ 3.0%); yield is 4.6% (need ≥ 15.0%); sequence prob is 25% (need ≥ 30%); R:R is 0.9× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$66.55</div>
+      <div class='sm-meta'>+1.7% vs current $67.73 · median 12 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$69.64</div>
+      <div class='sm-meta'>+2.8% vs current · median 17 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+4.6%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.9×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>25%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>45%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$63.08</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $59.17 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>dip is only 2.9% below current (need ≥ 3.0%); yield is 8.3% (need ≥ 15.0%); sequence prob is 25% (need ≥ 30%); R:R is 0.6× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$65.75</div>
+      <div class='sm-meta'>+2.9% vs current $67.73 · median 27 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$71.19</div>
+      <div class='sm-meta'>+5.1% vs current · median 39 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+8.3%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.6×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>25%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>45%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$56.06</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $53.98 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -12080,9 +14643,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-WAIT'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-WAIT'>WAIT</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-WAIT'>WAIT</span>
@@ -12095,14 +14664,135 @@ footer.band p { margin: 4px 0; }
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>LIN</strong> drops to <strong>$495.25</strong> (-2.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-24 -&gt; 2026-07-15. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>LIN</strong> drops to <strong>$495.25</strong> (-2.2% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-24 -&gt; 2026-07-15. Consider setting a buy-limit order at this level. Note: <strong>Catalyst proximity</strong> would still be active at dip — the verdict at dip would be WAIT, not ENTER, until those clear.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>dip is only 1.3% below current (need ≥ 3.0%); rally is only 2.4% above current (need ≥ 3.0%); yield is 3.7% (need ≥ 15.0%); sequence prob is 26% (need ≥ 30%); R:R is 0.8× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$500.26</div>
+      <div class='sm-meta'>+1.3% vs current $506.63 · median 11 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$518.62</div>
+      <div class='sm-meta'>+2.4% vs current · median 18 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+3.7%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.8×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>26%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>44%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$478.62</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $456.77 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>dip is only 2.2% below current (need ≥ 3.0%); yield is 6.8% (need ≥ 15.0%); sequence prob is 26% (need ≥ 30%); R:R is 0.3× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$495.25</div>
+      <div class='sm-meta'>+2.2% vs current $506.63 · median 28 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$529.09</div>
+      <div class='sm-meta'>+4.4% vs current · median 42 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+6.8%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>0.3×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>26%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>44%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$365.22</strong> (<span title='Of all MC paths that fell to this level, 63% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>63% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $416.82 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -12659,11 +15349,11 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>conviction 0.00 below WAIT floor 0.10</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MOG-A</strong> drops to <strong>$302.08</strong> (-4.6% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-06-10 -&gt; 2026-07-01. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$302.08</strong> (-4.6% from now), but the fair-value veto would <strong>still fire</strong> there (+13.21σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
@@ -12672,9 +15362,15 @@ footer.band p { margin: 4px 0; }
 
 </div>
 
-<div class='action-horizon'>
-  <div class='ah-label'>60-day horizon</div>
-  
+<details class='action-horizon ah-collapse verdict-bg-SKIP'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>60-day horizon</span>
+    <span class='verdict verdict-SKIP'>SKIP</span>
+    
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>
 <div class='action-group'>
   <div class='ag-headline'>
     <span class='verdict verdict-SKIP'>SKIP</span>
@@ -12683,18 +15379,139 @@ footer.band p { margin: 4px 0; }
   <div class='ag-reason'>conviction 0.00 below WAIT floor 0.10</div>
   <div class='ag-noaction'>No action — wait for conditions to change before re-evaluating.</div>
   
-<div class='ag-trigger enter-trigger'>
-  <span class='trigger-icon'>📍</span>
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
   <div class='trigger-body'>
-    <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>MOG-A</strong> drops to <strong>$291.71</strong> (-7.9% from now) it hits the dip-entry zone — that's the price where 70% of 50,000 MC paths touch on the way down. Date range: 2026-07-10 -&gt; 2026-07-30. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>$291.71</strong> (-7.9% from now), but the fair-value veto would <strong>still fire</strong> there (+12.33σ — still above the 2.0σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
   </div>
 </div>
 
   
 </div>
+</div>
+</details>
 
 </div>
+
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same 50,000 Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>30-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>rally is only 2.2% above current (need ≥ 3.0%); yield is 7.2% (need ≥ 15.0%); sequence prob is 12% (need ≥ 30%); R:R is 1.5× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$302.08</div>
+      <div class='sm-meta'>+4.6% vs current $316.58 · median 19 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$323.68</div>
+      <div class='sm-meta'>+2.2% vs current · median 10 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+7.2%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.5×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>12%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>58%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$287.35</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $247.41 — agrees</span>
+  </div>
+</div>
+
+<details class='sm-collapse no-swing'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>60-day horizon</span>
+    <span class='sm-cverdict no-swing'>NO ACTIONABLE SWING</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>
+<div class='sm-horizon no-swing'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>60-day horizon</span>
+    <span class='sm-verdict no-swing'><strong>NO ACTIONABLE SWING</strong></span>
+  </div>
+  <div class='sm-vsub'>yield is 12.8% (need ≥ 15.0%); sequence prob is 13% (need ≥ 30%); R:R is 1.0× (need ≥ 2.0×)</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>$291.71</div>
+      <div class='sm-meta'>+7.9% vs current $316.58 · median 39 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>$329.02</div>
+      <div class='sm-meta'>+3.9% vs current · median 25 sessions away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>+12.8%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>1.0×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>13%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>57%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> <strong>$254.09</strong> (<span title='Of all MC paths that fell to this level, 60% recovered back to dip-entry within the horizon. Below this depth recovery odds drop further — trade is doubtful'>60% recovery odds at this level</span>)
+    <span class='sm-cross'>5%-tail cross-check: $210.12 — agrees</span>
+  </div>
+</div>
+</div>
+</details>
 
 </div>
 
@@ -12852,7 +15669,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+14.44σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+14.44σ vs FV range; at projected dip +13.21σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -12947,7 +15764,7 @@ footer.band p { margin: 4px 0; }
 
 <div class='kv-row veto-fired'>
   <span class='k'>⚠ Fair value premium</span>
-  <span class='v' style='font-family: inherit; font-size: 12px;'>+14.44σ vs FV range</span>
+  <span class='v' style='font-family: inherit; font-size: 12px;'>+14.44σ vs FV range; at projected dip +12.33σ — FV veto STILL fires at dip</span>
   <span class='v-right'>ENTER → SKIP — price ≥ 2.0σ above fair value</span>
 </div>
 
@@ -13177,7 +15994,7 @@ footer.band p { margin: 4px 0; }
 <footer class='band'>
   <p><strong>SGC Swing Trader v1.</strong> Built atop the SGC Dip Engine pattern, evolved for swing-trader semantics: dual horizon, three-layer conviction, MC↔PDE cross-check, per-user verdicts, measurement-driven tier classifier.</p>
   <p>Not investment advice. The system is a research tool. Position sizing and execution are manual on Trading 212.</p>
-  <p>Rendered at 2026-05-21T11:05:45+00:00.</p>
+  <p>Rendered at 2026-05-21T11:28:28+00:00.</p>
 </footer>
 
 </div>
