@@ -629,10 +629,17 @@ swing_mode:
   # Recovery confidence — for the swing stop. The stop is set at the
   # deepest level below dip-entry where, of all simulated paths that
   # fell to that level, at least N% recovered back to dip-entry
-  # within the horizon. 25% = "if recovery odds are below 1-in-4,
-  # the trade is doubtful — cut". Below: trade is broken; above:
-  # holding is still defensible.
-  recovery_confidence: 0.25
+  # within the horizon.
+  #
+  # Bumped from an initial 0.25 to 0.60 after first-real-data review
+  # exposed the problem: at 0.25, the method correctly finds the
+  # deepest "still defensible" level, but for high-vol names that
+  # level is 40-60% below dip — wider than any real swing trader
+  # would ever accept. At 0.60 the stop demands "majority of paths
+  # that fell here recovered" — a tighter, more practical stop that
+  # produces realistic R:R numbers. The principled method survives;
+  # the bar is just much higher.
+  recovery_confidence: 0.60
 
   # Minimum cohort size (number of MC paths that must reach a given
   # depth) before that depth is considered statistically reliable
@@ -646,10 +653,20 @@ swing_mode:
   # Minimum probability that a simulated path touches the dip FIRST
   # and THEN reaches the rally, both within the horizon. This is the
   # truth-in-advertising probability that the swing trade works as
-  # planned. 45% = "more likely than not the trade completes". Bumped
-  # from an earlier 35% after honest expert review concluded 35% was
-  # marginal once real-world execution friction is accounted for.
-  min_sequence_prob: 0.45
+  # planned.
+  #
+  # Calibration history:
+  #   0.35 — initial recommendation
+  #   0.45 — bumped after honest review framed "more likely than not"
+  #   0.30 — REVISED DOWN to 0.30 after first real-data check across
+  #          the 21-ticker watchlist showed the best ticker (PL 30d)
+  #          peaked at 36%, with most clustering 12-25%. Under pure
+  #          GBM dynamics, sequence probabilities above 40-45% are
+  #          mathematically near-unreachable because the dip-then-
+  #          rally ORDERING constraint is itself a strong filter.
+  #          0.30 = "≥ 1-in-3 chance the trade completes as planned"
+  #          remains a meaningful gate — most setups still fail.
+  min_sequence_prob: 0.30
 
   # Minimum reward-to-risk ratio (R:R) — dollars of upside per dollar
   # risked between dip-entry and the swing stop. 2.0× = make $2 if it
