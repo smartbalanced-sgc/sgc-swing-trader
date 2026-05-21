@@ -595,6 +595,112 @@ price_levels:
   # most likely to occur. v17 used 7 (a 2-week window).
   date_range_half_width_sessions: 7
 
+# ---------- Step 6b — Swing-mode metrics (planned dip→rally trade) ----------
+#
+# Where target-mode answers "is this stock likely to be higher in 30
+# days?" (buy now, ride the trend), swing-mode answers "would I get a
+# better entry by waiting for a dip, and is there a realistic exit
+# within the horizon to plan a sell at?". Two distinct questions, both
+# answered from the same 50k MC paths.
+#
+# All thresholds here have been chosen to favor QUALITY over QUANTITY:
+# fewer ACTIONABLE flags fire per night, but the ones that do meet a
+# real-money standard. See the chat transcript that led to this for
+# the EV math: at the bare-minimum thresholds, expected value per
+# trade attempted (before slippage) is ~+6% — positive but thin.
+#
+# All four "min_*" gates must pass for a swing setup to be flagged
+# ACTIONABLE. Any failure = NO ACTIONABLE SWING (with explicit reason).
+
+swing_mode:
+  # Touch confidence — fraction of MC paths that must reach the
+  # dip-entry (or rally-exit) price during the horizon. 70% means
+  # "patient enough for a real discount, but realistic that the dip
+  # is actually likely to happen". Implementation: dip-entry = 70th
+  # percentile of per-path minima; rally-exit = 30th percentile of
+  # per-path maxima (equivalently: 70% of paths touch each).
+  #
+  # NOTE: kept separate from price_levels.dip_conviction_percentile
+  # so swing-mode can be tuned independently of the existing
+  # price-levels panel (which currently shares the same value but
+  # may diverge later).
+  touch_confidence: 0.70
+
+  # Recovery confidence — for the swing stop. The stop is set at the
+  # deepest level below dip-entry where, of all simulated paths that
+  # fell to that level, at least N% recovered back to dip-entry
+  # within the horizon.
+  #
+  # Bumped from an initial 0.25 to 0.60 after first-real-data review
+  # exposed the problem: at 0.25, the method correctly finds the
+  # deepest "still defensible" level, but for high-vol names that
+  # level is 40-60% below dip — wider than any real swing trader
+  # would ever accept. At 0.60 the stop demands "majority of paths
+  # that fell here recovered" — a tighter, more practical stop that
+  # produces realistic R:R numbers. The principled method survives;
+  # the bar is just much higher.
+  recovery_confidence: 0.60
+
+  # Minimum cohort size (number of MC paths that must reach a given
+  # depth) before that depth is considered statistically reliable
+  # as a stop level. Smaller cohorts give noisy recovery rates from
+  # single outliers. Floor: max(20, 0.5% of n_paths) — applied in
+  # code, this YAML knob is the absolute minimum.
+  min_stop_cohort: 20
+
+  # --- The four ACTIONABLE-SWING verdict gates ---
+
+  # Minimum probability that a simulated path touches the dip FIRST
+  # and THEN reaches the rally, both within the horizon. This is the
+  # truth-in-advertising probability that the swing trade works as
+  # planned.
+  #
+  # Calibration history:
+  #   0.35 — initial recommendation
+  #   0.45 — bumped after honest review framed "more likely than not"
+  #   0.30 — REVISED DOWN to 0.30 after first real-data check across
+  #          the 21-ticker watchlist showed the best ticker (PL 30d)
+  #          peaked at 36%, with most clustering 12-25%. Under pure
+  #          GBM dynamics, sequence probabilities above 40-45% are
+  #          mathematically near-unreachable because the dip-then-
+  #          rally ORDERING constraint is itself a strong filter.
+  #          0.30 = "≥ 1-in-3 chance the trade completes as planned"
+  #          remains a meaningful gate — most setups still fail.
+  min_sequence_prob: 0.30
+
+  # Minimum reward-to-risk ratio (R:R) — dollars of upside per dollar
+  # risked between dip-entry and the swing stop. 2.0× = make $2 if it
+  # works for every $1 lost if stopped out. Industry-standard floor
+  # for swing trading; below this the trade isn't worth the risk
+  # regardless of probability.
+  min_reward_to_risk: 2.0
+
+  # Minimum yield (rally-exit - dip-entry) / dip-entry as a percent.
+  # 15% ensures the % move is non-trivial after costs. Lower than
+  # earlier 25% draft because R:R does most of the quality-control
+  # work; yield gate just rejects micro-moves.
+  min_yield_pct: 15.0
+
+  # Minimum % the dip-entry must be below current price, and the
+  # rally-exit must be above current. Below 3%, the "dip" or "rally"
+  # is trivial — not worth structuring a separate trade for. Common
+  # on low-vol mega-caps where paths cluster tightly around current.
+  min_dip_below_current_pct: 3.0
+  min_rally_above_current_pct: 3.0
+
+  # --- Cross-check (sanity) thresholds for the swing stop ---
+
+  # 5th-percentile-of-path-minima as a tail-event cross-check stop.
+  # "Only 1-in-20 paths fell this deep" — useful sanity reference
+  # against the primary conditional-recovery stop.
+  tail_percentile: 0.05
+
+  # If the primary swing stop disagrees with the tail cross-check by
+  # more than this many percent of dip-entry, flag the ticker for
+  # manual review — something is unusual about this name's path
+  # distribution (fat tails, regime break, illiquid path generator).
+  cross_check_disagreement_pct: 30.0
+
 # ---------- Step 7 — MC ↔ PDE cross-check ----------
 
 cross_check:

@@ -147,6 +147,24 @@ header.band h1::before {
   vertical-align: middle;
   border-radius: 2px;
 }
+header.band .title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+header.band .run-now {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--gold); color: #2a1908;
+  padding: 7px 14px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  margin-right: 18px;
+}
+header.band .run-now:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
 header.band .subtitle { color: #d6c9a8; font-size: 13px; padding-left: 18px; }
 header.band .meta {
   display: flex; flex-wrap: wrap; gap: 8px 24px;
@@ -436,6 +454,137 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .price-levels .pl-zone.stop  .pl-icon { color: var(--warn); }
 .price-levels .pl-zone.target .pl-icon { color: var(--accent); }
 .price-levels .pl-user-row { font-size: 11.5px; color: var(--muted); padding-left: 36px; margin-top: 4px; line-height: 1.5; }
+
+/* ---------- swing-mode panel (planned dip→rally trade) ---------- */
+.swing-mode { background: #fdf7f1; border: 1px solid #d4a574; border-radius: 6px; padding: 14px 16px; margin: 14px 0; }
+.swing-mode .sm-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 8px; }
+.swing-mode .sm-head .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #7c3a0c; }
+.swing-mode .sm-head .sub { font-size: 11.5px; color: var(--text-soft); }
+.swing-mode .sm-explainer { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.55; }
+.swing-mode .sm-horizon { background: white; border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; margin: 10px 0; }
+.swing-mode .sm-horizon.actionable { border-left: 4px solid var(--ok); }
+.swing-mode .sm-horizon.no-swing { border-left: 4px solid #cbd5e1; }
+.swing-mode .sm-hhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.swing-mode .sm-hlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); }
+.swing-mode .sm-verdict.actionable { color: var(--ok); font-size: 12.5px; }
+.swing-mode .sm-verdict.no-swing { color: var(--muted); font-size: 12.5px; }
+.swing-mode .sm-vsub { font-size: 11.5px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.45; }
+.swing-mode .sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+.swing-mode .sm-cell { padding: 6px 8px; border-left: 2px solid #e2e8f0; }
+.swing-mode .sm-cell .sm-key { font-size: 11px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.swing-mode .sm-cell .sm-val { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0; }
+.swing-mode .sm-cell .sm-meta { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.swing-mode .sm-stop { margin-top: 12px; padding: 8px 10px; background: #fafaf9; border-radius: 4px; font-size: 12px; color: var(--text-soft); line-height: 1.55; }
+.swing-mode .sm-stop .sm-stopkey { font-weight: 600; color: var(--text); margin-right: 4px; }
+.swing-mode .sm-stop .sm-cross { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.swing-mode .sm-stop .warn { color: #b45309; }
+
+/* ---------- 60-day horizon collapse — both Action and Swing panels ---------- */
+/* Secondary horizon hides its detail by default; summary shows verdict
+   as a full-colour pill so the user can scan the at-a-glance state. */
+
+/* shared collapse cosmetics */
+details.sm-collapse, details.action-horizon.ah-collapse {
+  border-radius: 6px; margin: 10px 0;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.12s ease;
+}
+details.sm-collapse[open], details.action-horizon.ah-collapse[open] {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+/* the summary bar — coloured when closed, faded when open */
+details.sm-collapse > summary,
+details.action-horizon.ah-collapse > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  user-select: none;
+}
+details.sm-collapse > summary::-webkit-details-marker,
+details.action-horizon.ah-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+/* chevron rotates when open */
+.sm-cchev, .ah-cchev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--text-soft); font-size: 11px;
+}
+details[open] > summary > .sm-cchev,
+details[open] > summary > .ah-cchev {
+  transform: rotate(90deg);
+}
+.sm-chint, .ah-chint {
+  font-size: 11px; color: var(--muted); margin-left: auto;
+  font-style: italic;
+}
+details[open] > summary > .sm-chint,
+details[open] > summary > .ah-chint {
+  visibility: hidden;
+}
+.ah-extra {
+  font-size: 11px; color: var(--text-soft);
+  background: white; padding: 2px 7px; border-radius: 10px;
+  border: 1px solid var(--border);
+}
+/* swing-mode 60d collapse — copper accent */
+details.sm-collapse {
+  background: #fdf7f1;
+  border-color: #d4a574;
+}
+details.sm-collapse > summary { background: #fdf7f1; }
+details.sm-collapse.actionable > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, #fdf7f1 60%);
+  border-bottom: 2px solid var(--ok);
+}
+details.sm-collapse.no-swing > summary {
+  background: linear-gradient(90deg, #f3f4f6 0%, #fdf7f1 60%);
+}
+.sm-clabel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+.sm-cverdict {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 4px;
+}
+.sm-cverdict.actionable { background: var(--ok); color: white; }
+.sm-cverdict.no-swing { background: #cbd5e1; color: #475569; }
+.sm-cbody { padding: 0 14px 14px; background: white; }
+/* action 60d collapse — verdict colour band */
+details.action-horizon.ah-collapse { background: white; }
+.ah-csum .ah-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+details.action-horizon.verdict-bg-ENTER > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, white 70%);
+  border-bottom: 2px solid #15803d;
+}
+details.action-horizon.verdict-bg-HOLD > summary {
+  background: linear-gradient(90deg, #dbeafe 0%, white 70%);
+  border-bottom: 2px solid #1e40af;
+}
+details.action-horizon.verdict-bg-WAIT > summary {
+  background: linear-gradient(90deg, #fef3c7 0%, white 70%);
+  border-bottom: 2px solid #92400e;
+}
+details.action-horizon.verdict-bg-TRIM > summary {
+  background: linear-gradient(90deg, #fed7aa 0%, white 70%);
+  border-bottom: 2px solid #9a3412;
+}
+details.action-horizon.verdict-bg-SKIP > summary {
+  background: linear-gradient(90deg, #fee2e2 0%, white 70%);
+  border-bottom: 2px solid #991b1b;
+}
+details.action-horizon.verdict-bg-EXIT > summary {
+  background: linear-gradient(90deg, #fecaca 0%, white 70%);
+  border-bottom: 2px solid #7f1d1d;
+}
+.ah-cbody { padding: 14px; }
 
 /* ---------- plain-English explainer blocks (top of technical panels) ---------- */
 .what-it-is { background: #fafaf9; border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-soft); line-height: 1.55; border-radius: 0 4px 4px 0; }
@@ -830,8 +979,6 @@ def render(payload: dict) -> str:
 
 def _render_header(payload: dict) -> str:
     run_date = payload.get("run_date", "?")
-    started = payload.get("run_started_at", "?")
-    finished = payload.get("run_finished_at", "?")
     n_tick = len(payload.get("tickers", {}))
     n_err = len(payload.get("errors", []))
     market_regime = (payload.get("market_context") or {}).get("regime", "—")
@@ -858,16 +1005,34 @@ def _render_header(payload: dict) -> str:
 </div>
 """
 
+    # Run timestamp in UK local time — combines date + time into one
+    # line (replaces the prior Started/Finished pair). Falls back to
+    # raw run_date string if run_started_at is missing or unparseable.
+    run_timestamp_uk = _format_uk_local_timestamp(
+        payload.get("run_started_at"), fallback_date=run_date
+    )
+
+    # Run-now button — deep-links to the GitHub Actions workflow page
+    # where the user can click "Run workflow" to trigger an on-demand
+    # production run (the workflow has workflow_dispatch enabled).
+    run_now_html = (
+        '<a class="run-now" href="https://github.com/smartbalanced-sgc/sgc-swing-trader/actions/workflows/nightly.yml"'
+        ' target="_blank" rel="noopener" title="Opens the GitHub Actions page — click \'Run workflow\' there to trigger an on-demand run">'
+        '▶ Run now'
+        '</a>'
+    )
+
     return f"""
 {test_banner}
 <header class="band">
   <div class="wrap">
-    <h1>SGC Swing Trader{' <span class="mode-tag">test</span>' if config.IS_TEST_MODE else ''}</h1>
+    <div class="title-row">
+      <h1>SGC Swing Trader{' <span class="mode-tag">test</span>' if config.IS_TEST_MODE else ''}</h1>
+      {run_now_html}
+    </div>
     <div class="subtitle">Conviction + timing for {n_tick} ticker(s) across {", ".join(f"{h}d" for h in config.HORIZONS)} horizons. Per-user verdicts for Aidy and Jesse.</div>
     <div class="meta">
-      <span>Run date: <strong>{html.escape(run_date)}</strong></span>
-      <span>Started: {html.escape(started)}</span>
-      <span>Finished: {html.escape(finished)}</span>
+      <span>Run: <strong>{html.escape(run_timestamp_uk)}</strong></span>
       <span>Market: <strong>{html.escape(str(market_regime))}</strong> (VIX {html.escape(str(vix))})</span>
       {cost_html}
       {err_html}
@@ -875,6 +1040,26 @@ def _render_header(payload: dict) -> str:
   </div>
 </header>
 """
+
+
+def _format_uk_local_timestamp(iso_utc: str | None, fallback_date: str) -> str:
+    """Convert an ISO-8601 UTC timestamp to UK local time (Europe/London,
+    which auto-switches between GMT and BST). Returns "YYYY-MM-DD HH:MM UK".
+    If the input is missing or unparseable, falls back to the date alone.
+    """
+    if not iso_utc or iso_utc == "?":
+        return fallback_date
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        # fromisoformat handles "YYYY-MM-DDTHH:MM:SS+00:00" form;
+        # also accepts the "Z" suffix as of Python 3.11.
+        dt_utc = datetime.fromisoformat(iso_utc.replace("Z", "+00:00"))
+        dt_uk = dt_utc.astimezone(ZoneInfo("Europe/London"))
+        # tzname() returns "GMT" or "BST" depending on DST status.
+        return dt_uk.strftime("%Y-%m-%d %H:%M") + f" {dt_uk.tzname()}"
+    except (ValueError, ImportError):
+        return fallback_date
 
 
 def _render_cost(payload: dict) -> str:
@@ -1335,8 +1520,13 @@ def _render_ticker_card(ticker: str, snap: dict, watchlist_entry: dict) -> str:
     sections = [
         # 1. Price levels (expanded — the most actionable panel)
         _render_price_levels(snap, watchlist_entry),
-        # 2. Action — consolidated verdict + targets (expanded)
+        # 2. Action — consolidated trend-follow verdict + targets (expanded)
         _render_action(snap, watchlist_entry),
+        # 2b. Swing-mode — the planned dip→rally alternative path
+        # (expanded). Sits right after the trend-follow verdict so the
+        # user sees both routes side-by-side: buy now (Action) vs wait
+        # for the dip (Swing mode).
+        _render_swing_mode(snap),
         # 3. Catalyst engine read (expanded — qualitative recommendation)
         _render_engine_read(snap),
         # 4. Day-by-day price forecast — moved here per Jesse's
@@ -1502,6 +1692,180 @@ def _render_price_levels(snap: dict, watchlist_entry: dict) -> str:
 """
 
 
+def _render_swing_mode(snap: dict) -> str:
+    """Swing-mode panel — the planned dip→rally trade view.
+
+    Sits alongside the trend-follow Action panel. Where trend-follow
+    answers "buy now, ride the trend?", swing-mode answers "is there
+    a meaningfully cheaper entry I should wait for, and a realistic
+    exit to plan a sell at, within the horizon?".
+
+    Always-visible (expanded) because it's a primary actionable
+    surface — same tier as Price Levels and Action.
+    """
+    sm = snap.get("swing_mode")
+    if not sm or sm.get("status") == "pending":
+        return ""  # silent when MC isn't live
+
+    current = sm.get("current_price") or 0.0
+    horizons = sm.get("horizons") or {}
+
+    horizon_blocks: list[str] = []
+    primary_h = config.HORIZONS[0]
+    for h in config.HORIZONS:
+        # JSON round-trips integer keys to strings; accept both.
+        blk = horizons.get(h) or horizons.get(str(h))
+        if not blk:
+            continue
+        body = _render_swing_horizon(h, blk, current)
+        if h == primary_h:
+            # Primary horizon (30d) always expanded — the at-a-glance view.
+            horizon_blocks.append(body)
+        else:
+            # Secondary horizon (60d) collapsed by default with a
+            # verdict-coloured summary so the user can scan the
+            # headline without expanding. Per CLAUDE.md, the body still
+            # contains every metric — collapse is purely cosmetic.
+            verdict_label = (blk.get("verdict") or {}).get("label", "NO_ACTIONABLE_SWING")
+            verdict_class = "actionable" if verdict_label == "ACTIONABLE" else "no-swing"
+            summary_text = "ACTIONABLE SWING" if verdict_label == "ACTIONABLE" else "NO ACTIONABLE SWING"
+            horizon_blocks.append(
+                f"""
+<details class='sm-collapse {verdict_class}'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>{h}-day horizon</span>
+    <span class='sm-cverdict {verdict_class}'>{summary_text}</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>{body}</div>
+</details>
+"""
+            )
+
+    if not horizon_blocks:
+        return ""
+
+    return f"""
+<div class='swing-mode'>
+  <div class='sm-head'>
+    <span class='title'>Swing trade — planned dip&nbsp;→&nbsp;rally</span>
+    <span class='sub'>Wait for the cheaper entry, sell at the realistic peak — vs the trend-follow path above (buy now, ride the +1σ target)</span>
+  </div>
+  <div class='sm-explainer'>
+    Derived from the same {config.MC_PATHS:,} Monte Carlo paths as the
+    Price Levels above, but read for a different question: would
+    patient buying at a dip and planned selling at a rally beat
+    buying at current price? An <strong>ACTIONABLE</strong> verdict
+    means all four gates pass — dip and rally both meaningful, the
+    dip-then-rally sequence is likely enough to plan around, and the
+    reward per unit risked is acceptable. Otherwise this horizon
+    isn't a swing setup — either trend-follow at current price or
+    stand aside.
+  </div>
+  {"".join(horizon_blocks)}
+</div>
+"""
+
+
+def _render_swing_horizon(horizon_days: int, blk: dict, current: float) -> str:
+    """Render one horizon's swing-mode block."""
+    verdict_label = (blk.get("verdict") or {}).get("label", "NO_ACTIONABLE_SWING")
+    verdict_reason = (blk.get("verdict") or {}).get("reason", "")
+    verdict_class = "actionable" if verdict_label == "ACTIONABLE" else "no-swing"
+
+    dip = blk.get("dip_entry") or 0.0
+    rally = blk.get("rally_exit") or 0.0
+    comps = blk.get("components") or {}
+    dip_below_pct = comps.get("dip_below_current_pct", 0.0)
+    rally_above_pct = comps.get("rally_above_current_pct", 0.0)
+
+    seq = blk.get("sequence_prob", 0.0) * 100
+    miss = blk.get("miss_dip_prob", 0.0) * 100
+    yield_pct = blk.get("yield_pct", 0.0)
+    rr = blk.get("reward_to_risk", 0.0)
+    days_dip = blk.get("median_days_to_dip", 0)
+    days_rally = blk.get("median_days_to_rally", 0)
+
+    stop_blk = blk.get("swing_stop") or {}
+    swing_stop = stop_blk.get("primary")
+    tail_cross = stop_blk.get("tail_cross")
+    recovery_at_stop = (stop_blk.get("recovery_prob_at_stop") or 0.0) * 100
+    disagrees = stop_blk.get("cross_check_disagrees", False)
+
+    stop_html = (
+        f"<strong>${swing_stop:.2f}</strong> "
+        f"(<span title='Of all MC paths that fell to this level, "
+        f"{recovery_at_stop:.0f}% recovered back to dip-entry within the horizon. "
+        f"Below this depth recovery odds drop further — trade is doubtful'>"
+        f"{recovery_at_stop:.0f}% recovery odds at this level</span>)"
+        if swing_stop is not None
+        else "<strong>undefined</strong> (no level below dip recovers ≥ "
+             f"{int(stop_blk.get('recovery_threshold', 0.25) * 100)}% — trade too risky to plan)"
+    )
+
+    cross_html = (
+        f"5%-tail cross-check: ${tail_cross:.2f}"
+        + (" — <strong class='warn'>⚠ disagrees with primary by &gt;30%</strong>" if disagrees else " — agrees")
+        if tail_cross is not None else ""
+    )
+
+    if verdict_label == "ACTIONABLE":
+        verdict_text = f"<strong>ACTIONABLE SWING</strong>"
+        verdict_sub = f"all four gates pass"
+    else:
+        verdict_text = f"<strong>NO ACTIONABLE SWING</strong>"
+        verdict_sub = html.escape(verdict_reason)
+
+    return f"""
+<div class='sm-horizon {verdict_class}'>
+  <div class='sm-hhead'>
+    <span class='sm-hlabel'>{horizon_days}-day horizon</span>
+    <span class='sm-verdict {verdict_class}'>{verdict_text}</span>
+  </div>
+  <div class='sm-vsub'>{verdict_sub}</div>
+
+  <div class='sm-grid'>
+    <div class='sm-cell'>
+      <div class='sm-key'>Dip-entry (wait to buy)</div>
+      <div class='sm-val'>${dip:.2f}</div>
+      <div class='sm-meta'>{dip_below_pct:+.1f}% vs current ${current:.2f} · median {days_dip} session{'s' if days_dip != 1 else ''} away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Rally-exit (plan to sell)</div>
+      <div class='sm-val'>${rally:.2f}</div>
+      <div class='sm-meta'>{rally_above_pct:+.1f}% vs current · median {days_rally} session{'s' if days_rally != 1 else ''} away</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Yield (dip → rally)</div>
+      <div class='sm-val'>{yield_pct:+.1f}%</div>
+      <div class='sm-meta'>gain if both touch in sequence</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Reward/Risk</div>
+      <div class='sm-val'>{rr:.1f}×</div>
+      <div class='sm-meta'>$ upside per $ risked dip → swing-stop</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>P(dip-then-rally in order)</div>
+      <div class='sm-val'>{seq:.0f}%</div>
+      <div class='sm-meta'>true probability the planned trade works</div>
+    </div>
+    <div class='sm-cell'>
+      <div class='sm-key'>Miss-the-dip risk</div>
+      <div class='sm-val'>{miss:.0f}%</div>
+      <div class='sm-meta'>price rallies without offering the dip — you miss the trade waiting</div>
+    </div>
+  </div>
+
+  <div class='sm-stop'>
+    <span class='sm-stopkey'>Swing stop (below dip):</span> {stop_html}
+    <span class='sm-cross'>{cross_html}</span>
+  </div>
+</div>
+"""
+
+
 def _render_action(snap: dict, watchlist_entry: dict) -> str:
     """Consolidated verdict + targets panel (expanded by default).
 
@@ -1520,6 +1884,7 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
     current_price = ((snap.get("price_levels") or {}).get("current_price")) or 0.0
 
     horizon_blocks = []
+    primary_h = config.HORIZONS[0]
     for h in config.HORIZONS:
         per_horizon = horizons.get(h)
         if not per_horizon:
@@ -1615,12 +1980,92 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
                 dip_price = dip["price"]
                 dip_pct = (dip_price - current_price) / current_price * 100
                 dip_date_range = dip.get("date_range", "")
-                trigger_html = f"""
+                # Honest at-dip evaluation. The conviction engine
+                # reports, for the FV veto, whether it would clear at
+                # the projected dip price. Catalyst, regime, and
+                # liquidity vetoes are NOT price-sensitive — they're
+                # still active at dip if they're active at spot. So
+                # the trigger must qualify itself:
+                #   - no vetoes firing → score-only SKIP/WAIT → suggest dip-buy as-is.
+                #   - FV veto fires AND clears at dip → trigger is real (FV-wise); name any
+                #       other still-firing vetoes so user knows the verdict
+                #       at dip is "ENTER-modulo-those-vetoes."
+                #   - FV veto fires AND STILL fires at dip → trigger is misleading;
+                #       say so honestly, suggest re-evaluation post-catalyst /
+                #       deeper pullback.
+                #   - Other vetoes fire (no FV) → trigger still applies, but
+                #       remind user the other vetoes are still active at dip.
+                layer3 = g["breakdown"].get("layer3_vetoes") or {}
+                fired_vetoes = layer3.get("fired") or []
+                fv_check = next(
+                    (v for v in (layer3.get("all_checks") or [])
+                     if v.get("name") == "Fair value premium"),
+                    None,
+                )
+                fv_fires = bool(fv_check and fv_check.get("fires"))
+                fv_at_dip = (fv_check or {}).get("at_dip")
+                fv_clears_at_dip = bool(fv_at_dip and fv_at_dip.get("clears_veto"))
+
+                # Vetoes that are STILL active at dip-entry (used in
+                # all branches except Case D — when FV blocks the dip
+                # entirely, the other-veto list is informational only).
+                persistent_at_dip = [
+                    v["name"] for v in fired_vetoes
+                    if v.get("name") != "Fair value premium"
+                ]
+                if fv_fires and not fv_clears_at_dip:
+                    persistent_at_dip.append("Fair value premium")
+                persistent_label = ", ".join(persistent_at_dip)
+
+                if fv_fires and not fv_clears_at_dip and fv_at_dip is not None:
+                    # Case D — FV veto persists at dip. The misleading
+                    # "consider buy-limit at dip" framing would be
+                    # dishonest here. Replace with the truth.
+                    spot_sigma = fv_at_dip.get("threshold")  # numeric threshold for context
+                    at_dip_sigma = fv_at_dip.get("premium_sigmas")
+                    trigger_html = f"""
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
+  <div class='trigger-body'>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now), but the fair-value veto would <strong>still fire</strong> there ({at_dip_sigma:+.2f}σ — still above the {spot_sigma:.1f}σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
+  </div>
+</div>
+"""
+                else:
+                    # Cases A, B, C — trigger is valid (FV-wise), but if
+                    # other vetoes still apply at dip, name them so the
+                    # trader knows the verdict-at-dip won't be a clean
+                    # ENTER either. Both pieces of news compose: when FV
+                    # would clear AND other vetoes persist, the trader
+                    # benefits from knowing BOTH (the dip clears one
+                    # obstacle, but not all of them).
+                    notes = []
+                    if fv_fires and fv_clears_at_dip and fv_at_dip is not None:
+                        # FV veto present at spot but would clear at dip
+                        # → the dip really IS the trigger that flips the
+                        # FV component. Surface that explicitly.
+                        at_dip_sigma = fv_at_dip.get("premium_sigmas")
+                        notes.append(
+                            f"at this level the fair-value veto clears "
+                            f"({at_dip_sigma:+.2f}σ, below the "
+                            f"{fv_at_dip.get('threshold'):.1f}σ veto floor)"
+                        )
+                    if persistent_label:
+                        notes.append(
+                            f"<strong>{html.escape(persistent_label)}</strong> "
+                            f"would still be active at dip — the verdict at dip "
+                            f"would be WAIT, not ENTER, until those clear"
+                        )
+                    extra_note = (
+                        " Note: " + "; ".join(notes) + "." if notes else ""
+                    )
+                    trigger_html = f"""
 <div class='ag-trigger enter-trigger'>
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>{html.escape(ticker_sym)}</strong> drops to <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now) it hits the dip-entry zone — that's the price where 70% of {config.MC_PATHS:,} MC paths touch on the way down. Date range: {html.escape(dip_date_range)}. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>{html.escape(ticker_sym)}</strong> drops to <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now) it hits the dip-entry zone — that's the price where 70% of {config.MC_PATHS:,} MC paths touch on the way down. Date range: {html.escape(dip_date_range)}. Consider setting a buy-limit order at this level.{extra_note}</div>
   </div>
 </div>
 """
@@ -1653,11 +2098,37 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
 </div>
 """)
 
-        horizon_blocks.append(f"""
+        if h == primary_h:
+            # Primary horizon (30d) always expanded — the at-a-glance verdict.
+            horizon_blocks.append(f"""
 <div class='action-horizon'>
   <div class='ah-label'>{h}-day horizon</div>
   {"".join(group_blocks)}
 </div>
+""")
+        else:
+            # Secondary horizon (60d) collapsed by default. Summary shows
+            # the dominant verdict as a coloured pill so the user can
+            # scan without expanding. When multiple groups (split state
+            # between Aidy and Jesse), the first group's verdict leads.
+            lead_verdict = (groups[0]["breakdown"]["verdict_label"]
+                            if groups else "—")
+            extra_count = max(0, len(groups) - 1)
+            extra_html = (
+                f"<span class='ah-extra'>+{extra_count} more</span>"
+                if extra_count else ""
+            )
+            horizon_blocks.append(f"""
+<details class='action-horizon ah-collapse verdict-bg-{html.escape(lead_verdict)}'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>{h}-day horizon</span>
+    <span class='verdict verdict-{html.escape(lead_verdict)}'>{html.escape(lead_verdict)}</span>
+    {extra_html}
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>{"".join(group_blocks)}</div>
+</details>
 """)
 
     return f"""

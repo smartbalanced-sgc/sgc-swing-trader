@@ -197,9 +197,11 @@ def _process_one(ticker: str, watchlist_entry: dict, run_date: str) -> tuple[dic
     # serialized snapshot size.
     if snap["monte_carlo"].get("status") == "ok":
         snap["price_levels"] = snap["monte_carlo"].pop("price_levels", {"status": "pending"})
+        snap["swing_mode"] = snap["monte_carlo"].pop("swing_mode", {"status": "pending"})
         snap["daily_path"] = snap["monte_carlo"].pop("daily_path", {"status": "pending"})
     else:
         snap["price_levels"] = {"status": "pending", "reason": "monte_carlo not ok"}
+        snap["swing_mode"] = {"status": "pending", "reason": "monte_carlo not ok"}
         snap["daily_path"] = {"status": "pending", "reason": "monte_carlo not ok"}
 
     snap["analytic_verifier"] = _run_safely(

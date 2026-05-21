@@ -55,7 +55,13 @@ def evaluate(inputs: dict, horizon_days: int) -> dict:
         catalyst_distance_sessions  int|None  — None if no scheduled catalyst
         regime_state        str               — one of regime.states
         regime_confidence   float in [0, 1]
-        fair_value_premium_sigmas  float      — (price - FV_mean) / FV_sigma
+        fair_value_premium_sigmas  float      — (price - FV_mean) / FV_sigma at spot
+        fair_value_premium_sigmas_at_dip  float|None  — same metric evaluated
+            at the engine's projected dip-entry price for this horizon.
+            None when unavailable (no FV block, no dip zone, or σ undefined).
+            Used to surface "would the FV veto clear at the projected dip?"
+            in the breakdown — purely informational, the veto-fires decision
+            is still made at spot price.
         avg_daily_dollar_volume    float      — for the Tier C liquidity veto
         user_state          str               — "watching" or "entered"
 
@@ -293,17 +299,57 @@ def _layer3_vetoes(inputs: dict, veto_cfg, horizon_days: int) -> dict:
     checked.append(regime_entry)
 
     # Fair value — premium veto.
+    #
+    # Veto-fires decision uses SPOT price σ — same as before. The
+    # `at_dip` annotation is purely informational: if the engine also
+    # has a projected dip-entry price for this horizon, we report
+    # whether the FV veto would still fire (or would clear) at that
+    # dip price. This closes the documented bug class "dip-entry zone
+    # exists but never connects to the SKIP verdict" (CLAUDE.md) —
+    # the trader can now see, on a SKIP, whether waiting for the
+    # projected dip alone is enough to clear the FV veto or whether
+    # the SKIP is structurally durable.
     fv_sigma = inputs["fair_value_premium_sigmas"]
+    fv_sigma_at_dip = inputs.get("fair_value_premium_sigmas_at_dip")
     fv_threshold = veto_cfg.fair_value.enter_skip_premium_sigmas
     fv_veto_watching = fv_sigma >= fv_threshold and inputs["user_state"] == "watching"
     fv_veto_entered = (
         fv_sigma >= veto_cfg.fair_value.trim_for_entered_premium_sigmas
         and inputs["user_state"] == "entered"
     )
+
+    # Build the at-dip annotation. None when no dip-price metric is
+    # available (no FV block, no dip zone, σ undefined) — the consumer
+    # sees `at_dip` is None and shows the existing UI unchanged.
+    at_dip_block = None
+    if fv_sigma_at_dip is not None:
+        at_dip_clears = fv_sigma_at_dip < fv_threshold
+        at_dip_block = {
+            "premium_sigmas": fv_sigma_at_dip,
+            "threshold": fv_threshold,
+            "clears_veto": at_dip_clears,
+        }
+
+    detail = f"{fv_sigma:+.2f}σ vs FV range"
+    if at_dip_block is not None and (fv_veto_watching or fv_veto_entered):
+        # FV veto is firing at spot. Tell the user honestly what
+        # waiting-for-dip would (or wouldn't) buy them.
+        if at_dip_block["clears_veto"]:
+            detail += (
+                f"; at projected dip {fv_sigma_at_dip:+.2f}σ "
+                f"— FV veto would CLEAR at dip"
+            )
+        else:
+            detail += (
+                f"; at projected dip {fv_sigma_at_dip:+.2f}σ "
+                f"— FV veto STILL fires at dip"
+            )
+
     fv_entry = {
         "name": "Fair value premium",
-        "detail": f"{fv_sigma:+.2f}σ vs FV range",
+        "detail": detail,
         "fires": fv_veto_watching or fv_veto_entered,
+        "at_dip": at_dip_block,
         "effect": (
             f"ENTER → SKIP — price ≥ {fv_threshold}σ above fair value" if fv_veto_watching
             else f"HOLD → TRIM — price ≥ {fv_threshold}σ above fair value" if fv_veto_entered

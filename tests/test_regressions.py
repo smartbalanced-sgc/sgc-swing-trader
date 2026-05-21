@@ -433,5 +433,162 @@ class TestDataDepthHaircut(unittest.TestCase):
         self.assertAlmostEqual(result["layer2_confidence"]["multiplier"], 0.75, places=4)
 
 
+class TestFairValueVetoAtDipConnection(unittest.TestCase):
+    """BUG CLASS (CLAUDE.md): "Information the system has is not surfaced to
+    the user where a competent swing trader would expect to find it (e.g.
+    dip-entry zone exists but never connects to the SKIP verdict)."
+
+    The fair-value veto previously only evaluated at SPOT price. When the
+    engine produced a SKIP because FV premium ≥ 2σ at spot, a swing
+    trader looking at the dashboard's "ENTER trigger price" callout
+    would see a dip price suggested as a buy-limit level — without any
+    indication of whether the FV veto would still fire at that dip.
+
+    These tests pin the fix: the conviction breakdown's FV-veto entry
+    carries an `at_dip` block when the dip price is known. That block
+    reports the σ at dip and whether the veto would clear there. The
+    veto-fires decision at spot is unchanged."""
+
+    def _eval(
+        self,
+        *,
+        fv_sigma_spot: float,
+        fv_sigma_at_dip: float | None,
+        user_state: str = "watching",
+    ):
+        from src import conviction
+        inputs = {
+            "p_target": 0.35, "p_stop": 0.30, "ev_normalized": 0.10,
+            "user_state": user_state,
+            "mc_pde_p_target_delta_pp": 0.0,
+            "trajectory_direction_changes": 0,
+            "watchlist_tier": "A", "measured_tier": "A",
+            "tier_mismatch_consecutive_nights": 0,
+            "price_bar_count": 2000,
+            "catalyst_distance_sessions": None,
+            "regime_state": "uptrend_quiet", "regime_confidence": 0.50,
+            "fair_value_premium_sigmas": fv_sigma_spot,
+            "fair_value_premium_sigmas_at_dip": fv_sigma_at_dip,
+            "avg_daily_dollar_volume": 1e9,
+        }
+        return conviction.evaluate(inputs, horizon_days=30)
+
+    def _fv_entry(self, breakdown):
+        return next(
+            v for v in breakdown["layer3_vetoes"]["all_checks"]
+            if v["name"] == "Fair value premium"
+        )
+
+    def test_veto_fires_at_spot_and_still_fires_at_dip(self):
+        """PL-shaped case: 2.52σ at spot, 2.11σ at dip — dip alone
+        doesn't clear the +2σ threshold. Breakdown must report this
+        honestly so the dashboard can suppress the misleading trigger."""
+        result = self._eval(fv_sigma_spot=2.52, fv_sigma_at_dip=2.11)
+        fv = self._fv_entry(result)
+        self.assertTrue(fv["fires"], "spot σ ≥ 2.0 — FV veto must fire")
+        self.assertIsNotNone(fv["at_dip"], "at-dip block must be populated when dip σ provided")
+        self.assertAlmostEqual(fv["at_dip"]["premium_sigmas"], 2.11)
+        self.assertFalse(
+            fv["at_dip"]["clears_veto"],
+            "2.11σ at dip is STILL above the 2.0σ veto threshold — must not claim 'clears'",
+        )
+        self.assertIn("STILL fires at dip", fv["detail"])
+
+    def test_veto_fires_at_spot_but_clears_at_dip(self):
+        """FV veto fires at spot (2.5σ) but the projected dip drops it
+        below the 2σ floor (1.8σ). Breakdown must report that the dip
+        IS a real FV-veto trigger price — separately from whatever
+        other vetoes apply."""
+        result = self._eval(fv_sigma_spot=2.50, fv_sigma_at_dip=1.80)
+        fv = self._fv_entry(result)
+        self.assertTrue(fv["fires"], "spot σ ≥ 2.0 — FV veto fires at spot")
+        self.assertIsNotNone(fv["at_dip"])
+        self.assertAlmostEqual(fv["at_dip"]["premium_sigmas"], 1.80)
+        self.assertTrue(fv["at_dip"]["clears_veto"], "1.8σ is below 2.0σ — must report clears")
+        self.assertIn("would CLEAR at dip", fv["detail"])
+
+    def test_at_dip_none_when_dip_price_unavailable(self):
+        """Backward-compat: when the dip price isn't available (e.g.
+        Monte Carlo not yet wired, FV missing), `at_dip` is None and
+        the detail string matches the legacy format (no annotation)."""
+        result = self._eval(fv_sigma_spot=2.50, fv_sigma_at_dip=None)
+        fv = self._fv_entry(result)
+        self.assertTrue(fv["fires"])
+        self.assertIsNone(fv["at_dip"], "no at-dip block when dip σ is None")
+        self.assertNotIn("at projected dip", fv["detail"])
+
+    def test_verdict_label_unchanged_by_at_dip(self):
+        """Critical invariant: the at-dip annotation is INFORMATIONAL ONLY.
+        It must not change the verdict label or final score. The engine
+        stays exactly as conservative as before — we've added diagnostic
+        info, not a backdoor that loosens the veto."""
+        with_annotation = self._eval(fv_sigma_spot=2.50, fv_sigma_at_dip=1.80)
+        without_annotation = self._eval(fv_sigma_spot=2.50, fv_sigma_at_dip=None)
+        self.assertEqual(
+            with_annotation["verdict_label"], without_annotation["verdict_label"],
+            "at-dip annotation must not change the verdict label",
+        )
+        self.assertEqual(
+            with_annotation["final_score"], without_annotation["final_score"],
+            "at-dip annotation must not change the final score",
+        )
+        self.assertEqual(with_annotation["verdict_label"], "SKIP")
+
+    def test_at_dip_not_reported_when_veto_does_not_fire(self):
+        """When FV veto doesn't fire at spot, the at-dip annotation is
+        not surfaced in the detail string — the question 'would dip
+        clear it?' only matters when there's a veto to clear."""
+        result = self._eval(fv_sigma_spot=0.5, fv_sigma_at_dip=0.1)
+        fv = self._fv_entry(result)
+        self.assertFalse(fv["fires"])
+        # The at_dip block can still be populated for consumers that
+        # want it, but the human-readable detail should not be cluttered.
+        self.assertNotIn("at projected dip", fv["detail"])
+
+
+class TestFairValueRangeSigmaPersisted(unittest.TestCase):
+    """The FV block must persist `range_sigma` so downstream consumers
+    can re-compute "premium at any price" without re-running the
+    triangulation. Required for the at-dip FV-veto evaluation in
+    `src/pipeline/fair_value.premium_sigmas_at_price` and
+    `src/pipeline/verdict._fv_sigmas_at_dip`."""
+
+    def test_triangulate_returns_sigma(self):
+        from src.pipeline import fair_value
+        methods = [
+            {"name": "DCF", "value": 100.0},
+            {"name": "PT", "value": 120.0},
+        ]
+        result = fair_value._triangulate(methods, current_price=140.0)
+        self.assertIn("sigma", result)
+        self.assertGreater(result["sigma"], 0.0)
+
+    def test_premium_sigmas_at_price_inverts_correctly(self):
+        from src.pipeline import fair_value
+        # Build an FV-block-shaped dict the way fair_value.compute writes it.
+        fv_block = {
+            "status": "ok",
+            "current_price": 42.66,
+            "range_low": 2.14,
+            "range_mean": 27.0,
+            "range_high": 27.0,
+            "range_sigma": 6.215,
+            "premium_sigmas": (42.66 - 27.0) / 6.215,
+        }
+        spot = fair_value.premium_sigmas_at_price(fv_block, 42.66)
+        dip = fair_value.premium_sigmas_at_price(fv_block, 40.12)
+        self.assertAlmostEqual(spot, fv_block["premium_sigmas"], places=4)
+        self.assertAlmostEqual(dip, (40.12 - 27.0) / 6.215, places=4)
+        self.assertLess(dip, spot, "dip price → lower premium σ than spot")
+
+    def test_premium_sigmas_at_price_returns_none_when_unusable(self):
+        from src.pipeline import fair_value
+        self.assertIsNone(fair_value.premium_sigmas_at_price(None, 100.0))
+        self.assertIsNone(fair_value.premium_sigmas_at_price({}, 100.0))
+        self.assertIsNone(fair_value.premium_sigmas_at_price(
+            {"status": "ok", "range_mean": 50.0}, 100.0  # no sigma
+        ))
+
+
 if __name__ == "__main__":
     unittest.main()
