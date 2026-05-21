@@ -397,9 +397,9 @@ section.ticker-card > .card-body { padding: 4px 22px 22px; }
 .classifier-table .num { font-family: ui-monospace, monospace; text-align: right; }
 
 /* sparkline */
-.sparkline-block { display: flex; align-items: center; gap: 18px; }
-.sparkline-block svg { flex: 0 0 auto; }
-.sparkline-block .description { font-size: 12.5px; color: var(--text-soft); line-height: 1.5; }
+.sparkline-block { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.sparkline-block svg { flex: 1 1 240px; max-width: 100%; height: auto; min-width: 0; }
+.sparkline-block .description { font-size: 12.5px; color: var(--text-soft); line-height: 1.5; flex: 1 1 180px; min-width: 0; }
 .sparkline-block .trend { font-weight: 600; }
 .sparkline-block .trend.rising { color: var(--ok); }
 .sparkline-block .trend.decaying { color: var(--fail); }
@@ -2787,8 +2787,12 @@ def _sparkline_svg(values: list[float], width: int = 360, height: int = 56) -> s
     if vmin <= enter_threshold <= vmax:
         threshold_line = f"<line x1='{pad_x}' y1='{threshold_y:.1f}' x2='{pad_x + plot_w}' y2='{threshold_y:.1f}' stroke='#10b981' stroke-width='1' stroke-dasharray='3,3' opacity='0.6'/>"
 
+    # Responsive sizing: declare an intrinsic aspect ratio via viewBox
+    # and let CSS scale width to the container. preserveAspectRatio is
+    # default (xMidYMid meet) which is what we want — the SVG won't
+    # overflow its parent on narrow viewports.
     return f"""
-<svg width='{width}' height='{height}' viewBox='0 0 {width} {height}' xmlns='http://www.w3.org/2000/svg'>
+<svg viewBox='0 0 {width} {height}' xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='xMidYMid meet'>
   <rect x='0' y='0' width='{width}' height='{height}' fill='#fafafa' rx='3'/>
   {threshold_line}
   <polyline points='{polyline}' fill='none' stroke='#7c2d12' stroke-width='1.5'/>
