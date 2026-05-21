@@ -479,6 +479,113 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .swing-mode .sm-stop .sm-cross { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
 .swing-mode .sm-stop .warn { color: #b45309; }
 
+/* ---------- 60-day horizon collapse — both Action and Swing panels ---------- */
+/* Secondary horizon hides its detail by default; summary shows verdict
+   as a full-colour pill so the user can scan the at-a-glance state. */
+
+/* shared collapse cosmetics */
+details.sm-collapse, details.action-horizon.ah-collapse {
+  border-radius: 6px; margin: 10px 0;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.12s ease;
+}
+details.sm-collapse[open], details.action-horizon.ah-collapse[open] {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+/* the summary bar — coloured when closed, faded when open */
+details.sm-collapse > summary,
+details.action-horizon.ah-collapse > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  user-select: none;
+}
+details.sm-collapse > summary::-webkit-details-marker,
+details.action-horizon.ah-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+/* chevron rotates when open */
+.sm-cchev, .ah-cchev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--text-soft); font-size: 11px;
+}
+details[open] > summary > .sm-cchev,
+details[open] > summary > .ah-cchev {
+  transform: rotate(90deg);
+}
+.sm-chint, .ah-chint {
+  font-size: 11px; color: var(--muted); margin-left: auto;
+  font-style: italic;
+}
+details[open] > summary > .sm-chint,
+details[open] > summary > .ah-chint {
+  visibility: hidden;
+}
+.ah-extra {
+  font-size: 11px; color: var(--text-soft);
+  background: white; padding: 2px 7px; border-radius: 10px;
+  border: 1px solid var(--border);
+}
+/* swing-mode 60d collapse — copper accent */
+details.sm-collapse {
+  background: #fdf7f1;
+  border-color: #d4a574;
+}
+details.sm-collapse > summary { background: #fdf7f1; }
+details.sm-collapse.actionable > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, #fdf7f1 60%);
+  border-bottom: 2px solid var(--ok);
+}
+details.sm-collapse.no-swing > summary {
+  background: linear-gradient(90deg, #f3f4f6 0%, #fdf7f1 60%);
+}
+.sm-clabel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+.sm-cverdict {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 4px;
+}
+.sm-cverdict.actionable { background: var(--ok); color: white; }
+.sm-cverdict.no-swing { background: #cbd5e1; color: #475569; }
+.sm-cbody { padding: 0 14px 14px; background: white; }
+/* action 60d collapse — verdict colour band */
+details.action-horizon.ah-collapse { background: white; }
+.ah-csum .ah-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-soft);
+}
+details.action-horizon.verdict-bg-ENTER > summary {
+  background: linear-gradient(90deg, #dcfce7 0%, white 70%);
+  border-bottom: 2px solid #15803d;
+}
+details.action-horizon.verdict-bg-HOLD > summary {
+  background: linear-gradient(90deg, #dbeafe 0%, white 70%);
+  border-bottom: 2px solid #1e40af;
+}
+details.action-horizon.verdict-bg-WAIT > summary {
+  background: linear-gradient(90deg, #fef3c7 0%, white 70%);
+  border-bottom: 2px solid #92400e;
+}
+details.action-horizon.verdict-bg-TRIM > summary {
+  background: linear-gradient(90deg, #fed7aa 0%, white 70%);
+  border-bottom: 2px solid #9a3412;
+}
+details.action-horizon.verdict-bg-SKIP > summary {
+  background: linear-gradient(90deg, #fee2e2 0%, white 70%);
+  border-bottom: 2px solid #991b1b;
+}
+details.action-horizon.verdict-bg-EXIT > summary {
+  background: linear-gradient(90deg, #fecaca 0%, white 70%);
+  border-bottom: 2px solid #7f1d1d;
+}
+.ah-cbody { padding: 14px; }
+
 /* ---------- plain-English explainer blocks (top of technical panels) ---------- */
 .what-it-is { background: #fafaf9; border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-soft); line-height: 1.55; border-radius: 0 4px 4px 0; }
 .what-it-is .label { font-weight: 600; color: var(--text); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
@@ -1604,12 +1711,37 @@ def _render_swing_mode(snap: dict) -> str:
     horizons = sm.get("horizons") or {}
 
     horizon_blocks: list[str] = []
+    primary_h = config.HORIZONS[0]
     for h in config.HORIZONS:
         # JSON round-trips integer keys to strings; accept both.
         blk = horizons.get(h) or horizons.get(str(h))
         if not blk:
             continue
-        horizon_blocks.append(_render_swing_horizon(h, blk, current))
+        body = _render_swing_horizon(h, blk, current)
+        if h == primary_h:
+            # Primary horizon (30d) always expanded — the at-a-glance view.
+            horizon_blocks.append(body)
+        else:
+            # Secondary horizon (60d) collapsed by default with a
+            # verdict-coloured summary so the user can scan the
+            # headline without expanding. Per CLAUDE.md, the body still
+            # contains every metric — collapse is purely cosmetic.
+            verdict_label = (blk.get("verdict") or {}).get("label", "NO_ACTIONABLE_SWING")
+            verdict_class = "actionable" if verdict_label == "ACTIONABLE" else "no-swing"
+            summary_text = "ACTIONABLE SWING" if verdict_label == "ACTIONABLE" else "NO ACTIONABLE SWING"
+            horizon_blocks.append(
+                f"""
+<details class='sm-collapse {verdict_class}'>
+  <summary class='sm-csum'>
+    <span class='sm-cchev'>▸</span>
+    <span class='sm-clabel'>{h}-day horizon</span>
+    <span class='sm-cverdict {verdict_class}'>{summary_text}</span>
+    <span class='sm-chint'>click to expand</span>
+  </summary>
+  <div class='sm-cbody'>{body}</div>
+</details>
+"""
+            )
 
     if not horizon_blocks:
         return ""
@@ -1752,6 +1884,7 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
     current_price = ((snap.get("price_levels") or {}).get("current_price")) or 0.0
 
     horizon_blocks = []
+    primary_h = config.HORIZONS[0]
     for h in config.HORIZONS:
         per_horizon = horizons.get(h)
         if not per_horizon:
@@ -1965,11 +2098,37 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
 </div>
 """)
 
-        horizon_blocks.append(f"""
+        if h == primary_h:
+            # Primary horizon (30d) always expanded — the at-a-glance verdict.
+            horizon_blocks.append(f"""
 <div class='action-horizon'>
   <div class='ah-label'>{h}-day horizon</div>
   {"".join(group_blocks)}
 </div>
+""")
+        else:
+            # Secondary horizon (60d) collapsed by default. Summary shows
+            # the dominant verdict as a coloured pill so the user can
+            # scan without expanding. When multiple groups (split state
+            # between Aidy and Jesse), the first group's verdict leads.
+            lead_verdict = (groups[0]["breakdown"]["verdict_label"]
+                            if groups else "—")
+            extra_count = max(0, len(groups) - 1)
+            extra_html = (
+                f"<span class='ah-extra'>+{extra_count} more</span>"
+                if extra_count else ""
+            )
+            horizon_blocks.append(f"""
+<details class='action-horizon ah-collapse verdict-bg-{html.escape(lead_verdict)}'>
+  <summary class='ah-csum'>
+    <span class='ah-cchev'>▸</span>
+    <span class='ah-label'>{h}-day horizon</span>
+    <span class='verdict verdict-{html.escape(lead_verdict)}'>{html.escape(lead_verdict)}</span>
+    {extra_html}
+    <span class='ah-chint'>click to expand</span>
+  </summary>
+  <div class='ah-cbody'>{"".join(group_blocks)}</div>
+</details>
 """)
 
     return f"""
