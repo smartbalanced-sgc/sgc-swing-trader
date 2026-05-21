@@ -1615,12 +1615,92 @@ def _render_action(snap: dict, watchlist_entry: dict) -> str:
                 dip_price = dip["price"]
                 dip_pct = (dip_price - current_price) / current_price * 100
                 dip_date_range = dip.get("date_range", "")
-                trigger_html = f"""
+                # Honest at-dip evaluation. The conviction engine
+                # reports, for the FV veto, whether it would clear at
+                # the projected dip price. Catalyst, regime, and
+                # liquidity vetoes are NOT price-sensitive — they're
+                # still active at dip if they're active at spot. So
+                # the trigger must qualify itself:
+                #   - no vetoes firing → score-only SKIP/WAIT → suggest dip-buy as-is.
+                #   - FV veto fires AND clears at dip → trigger is real (FV-wise); name any
+                #       other still-firing vetoes so user knows the verdict
+                #       at dip is "ENTER-modulo-those-vetoes."
+                #   - FV veto fires AND STILL fires at dip → trigger is misleading;
+                #       say so honestly, suggest re-evaluation post-catalyst /
+                #       deeper pullback.
+                #   - Other vetoes fire (no FV) → trigger still applies, but
+                #       remind user the other vetoes are still active at dip.
+                layer3 = g["breakdown"].get("layer3_vetoes") or {}
+                fired_vetoes = layer3.get("fired") or []
+                fv_check = next(
+                    (v for v in (layer3.get("all_checks") or [])
+                     if v.get("name") == "Fair value premium"),
+                    None,
+                )
+                fv_fires = bool(fv_check and fv_check.get("fires"))
+                fv_at_dip = (fv_check or {}).get("at_dip")
+                fv_clears_at_dip = bool(fv_at_dip and fv_at_dip.get("clears_veto"))
+
+                # Vetoes that are STILL active at dip-entry (used in
+                # all branches except Case D — when FV blocks the dip
+                # entirely, the other-veto list is informational only).
+                persistent_at_dip = [
+                    v["name"] for v in fired_vetoes
+                    if v.get("name") != "Fair value premium"
+                ]
+                if fv_fires and not fv_clears_at_dip:
+                    persistent_at_dip.append("Fair value premium")
+                persistent_label = ", ".join(persistent_at_dip)
+
+                if fv_fires and not fv_clears_at_dip and fv_at_dip is not None:
+                    # Case D — FV veto persists at dip. The misleading
+                    # "consider buy-limit at dip" framing would be
+                    # dishonest here. Replace with the truth.
+                    spot_sigma = fv_at_dip.get("threshold")  # numeric threshold for context
+                    at_dip_sigma = fv_at_dip.get("premium_sigmas")
+                    trigger_html = f"""
+<div class='ag-trigger enter-trigger' style='border-color: #f59e0b;'>
+  <span class='trigger-icon'>⚠</span>
+  <div class='trigger-body'>
+    <div class='trigger-label'>Dip alone won't clear the verdict</div>
+    <div class='trigger-detail'>The 30/60d dip zone is at <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now), but the fair-value veto would <strong>still fire</strong> there ({at_dip_sigma:+.2f}σ — still above the {spot_sigma:.1f}σ veto floor). This is a structural over-extension, not a temporary spike — buying the projected dip would not flip the verdict to ENTER. Re-evaluate after the next material catalyst (earnings / guidance / sector reset) or after a deeper pullback that brings price closer to the fair-value range.</div>
+  </div>
+</div>
+"""
+                else:
+                    # Cases A, B, C — trigger is valid (FV-wise), but if
+                    # other vetoes still apply at dip, name them so the
+                    # trader knows the verdict-at-dip won't be a clean
+                    # ENTER either. Both pieces of news compose: when FV
+                    # would clear AND other vetoes persist, the trader
+                    # benefits from knowing BOTH (the dip clears one
+                    # obstacle, but not all of them).
+                    notes = []
+                    if fv_fires and fv_clears_at_dip and fv_at_dip is not None:
+                        # FV veto present at spot but would clear at dip
+                        # → the dip really IS the trigger that flips the
+                        # FV component. Surface that explicitly.
+                        at_dip_sigma = fv_at_dip.get("premium_sigmas")
+                        notes.append(
+                            f"at this level the fair-value veto clears "
+                            f"({at_dip_sigma:+.2f}σ, below the "
+                            f"{fv_at_dip.get('threshold'):.1f}σ veto floor)"
+                        )
+                    if persistent_label:
+                        notes.append(
+                            f"<strong>{html.escape(persistent_label)}</strong> "
+                            f"would still be active at dip — the verdict at dip "
+                            f"would be WAIT, not ENTER, until those clear"
+                        )
+                    extra_note = (
+                        " Note: " + "; ".join(notes) + "." if notes else ""
+                    )
+                    trigger_html = f"""
 <div class='ag-trigger enter-trigger'>
   <span class='trigger-icon'>📍</span>
   <div class='trigger-body'>
     <div class='trigger-label'>ENTER trigger price</div>
-    <div class='trigger-detail'>If <strong>{html.escape(ticker_sym)}</strong> drops to <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now) it hits the dip-entry zone — that's the price where 70% of {config.MC_PATHS:,} MC paths touch on the way down. Date range: {html.escape(dip_date_range)}. Consider setting a buy-limit order at this level.</div>
+    <div class='trigger-detail'>If <strong>{html.escape(ticker_sym)}</strong> drops to <strong>${dip_price:.2f}</strong> ({dip_pct:+.1f}% from now) it hits the dip-entry zone — that's the price where 70% of {config.MC_PATHS:,} MC paths touch on the way down. Date range: {html.escape(dip_date_range)}. Consider setting a buy-limit order at this level.{extra_note}</div>
   </div>
 </div>
 """

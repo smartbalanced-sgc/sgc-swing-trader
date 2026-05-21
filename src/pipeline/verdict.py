@@ -75,6 +75,7 @@ import traceback
 from datetime import datetime, timezone
 
 from src import config, conviction
+from src.pipeline.fair_value import premium_sigmas_at_price
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,12 @@ def synthesize(ticker: str, snap: dict, watchlist_entry: dict) -> dict:
             inputs["mc_pde_p_target_delta_pp"] = _per_user_horizon_pde_delta(
                 snap, user, h, fallback=inputs.get("mc_pde_p_target_delta_pp", 0.0)
             )
+            # Per-horizon dip-entry price → at-dip FV-veto evaluation.
+            # See conviction._layer3_vetoes FV block for why: lets the
+            # breakdown report whether the FV veto would still fire if
+            # the user waited for the engine's own projected dip. None
+            # when either the FV block or the dip zone is missing.
+            inputs["fair_value_premium_sigmas_at_dip"] = _fv_sigmas_at_dip(snap, h)
 
             breakdown = conviction.evaluate(inputs, horizon_days=h)
 
@@ -419,6 +426,25 @@ def _safe_get_fv_sigmas(fv_block: dict) -> float:
     if fv_block.get("status") != "ok":
         return 0.0
     return float(fv_block.get("premium_sigmas") or 0.0)
+
+
+def _fv_sigmas_at_dip(snap: dict, horizon: int) -> float | None:
+    """Compute (dip_price - FV_mean) / FV_sigma for one horizon's
+    projected dip-entry zone. Returns None when either input is
+    unavailable (no FV block, no price-levels block, no dip zone, or
+    σ undefined). The conviction engine treats None as "no at-dip
+    annotation available" — no behavior change in that case.
+    """
+    fv = snap.get("fair_value") or {}
+    pl = snap.get("price_levels") or {}
+    if fv.get("status") != "ok" or pl.get("status") != "ok":
+        return None
+    horizon_block = (pl.get("horizons") or {}).get(horizon) or {}
+    dip = horizon_block.get("dip") or {}
+    dip_price = dip.get("price")
+    if dip_price is None:
+        return None
+    return premium_sigmas_at_price(fv, float(dip_price))
 
 
 def _fail(reason: str) -> dict:

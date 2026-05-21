@@ -197,6 +197,7 @@ def estimate(
         "range_low": triangulated["range_low"],
         "range_mean": triangulated["range_mean"],
         "range_high": triangulated["range_high"],
+        "range_sigma": triangulated["sigma"],
         "premium_sigmas": triangulated["premium_sigmas"],
         "methods": method_names,
         "method_details": methods_detail,
@@ -590,6 +591,24 @@ def _triangulate(methods: list[dict], current_price: float) -> dict:
         "sigma": sigma,
         "premium_sigmas": premium_sigmas,
     }
+
+
+def premium_sigmas_at_price(fv_block: dict, price: float) -> float | None:
+    """Compute (price - FV mean) / FV sigma at an arbitrary price.
+
+    Used by the conviction engine to evaluate "would the FV veto fire if
+    we entered at the projected dip-entry price?" — i.e. to surface
+    whether a dip-entry would clear or still trip the +Nσ FV veto.
+
+    Returns None if the FV block isn't usable.
+    """
+    if not fv_block or fv_block.get("status") != "ok":
+        return None
+    mean = fv_block.get("range_mean")
+    sigma = fv_block.get("range_sigma")
+    if mean is None or sigma is None or sigma <= 0:
+        return None
+    return (float(price) - float(mean)) / float(sigma)
 
 
 # ---------- narrative ----------
