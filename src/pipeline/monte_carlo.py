@@ -131,6 +131,7 @@ import numpy as np
 import pandas_market_calendars as mcal
 
 from src import config
+from src.pipeline import swing_mode
 
 logger = logging.getLogger(__name__)
 
@@ -268,10 +269,18 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
 
     # --- Dip/rally price-level zones per horizon ---
     price_levels_horizons: dict[int, dict] = {}
+    swing_mode_horizons: dict[int, dict] = {}
     for h in HORIZONS:
+        paths_h = paths[:, :h]
         price_levels_horizons[h] = _compute_zones_for_horizon(
-            paths_h=paths[:, :h],
+            paths_h=paths_h,
             forecast_dates=forecast_dates[:h],
+        )
+        # Swing-mode metrics: planned dip→rally trade analytics.
+        # Re-uses the same paths array — no new simulation.
+        swing_mode_horizons[h] = swing_mode.compute_for_horizon(
+            paths_h=paths_h,
+            current_price=current_price,
         )
 
     # --- Aux fields for price_levels panel (RSI, 60d high) ---
@@ -285,6 +294,13 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
         "rsi": rsi,
         "high_60d": high_60d,
         "horizons": price_levels_horizons,
+        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+    swing_mode_out = {
+        "status": "ok",
+        "current_price": current_price,
+        "horizons": swing_mode_horizons,
         "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
@@ -315,6 +331,7 @@ def simulate(ticker: str, snap: dict, run_date: str | None = None) -> dict:
         "vol_annualized": sigma_annualized,
         "users": users_out,
         "price_levels": price_levels_out,
+        "swing_mode": swing_mode_out,
         "daily_path": daily_path_out,
     }
 

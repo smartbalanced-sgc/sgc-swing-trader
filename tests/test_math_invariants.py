@@ -26,7 +26,7 @@ import numpy as np
 
 from src import config
 from src.pipeline import monte_carlo, analytic_verifier, regime, volatility
-from src.pipeline import fair_value, targets
+from src.pipeline import fair_value, targets, swing_mode
 
 
 class TestMonteCarloInvariants(unittest.TestCase):
@@ -143,6 +143,159 @@ class TestMonteCarloInvariants(unittest.TestCase):
         self.assertLess(relative_error, 0.015,
             f"Terminal mean {observed_mean:.2f} vs expected {expected_mean:.2f} "
             f"(relative error {relative_error*100:.2f}%) - Itô correction may be wrong")
+
+
+class TestSwingModeInvariants(unittest.TestCase):
+    """Swing-mode metrics must satisfy structural invariants regardless
+    of input paths. These are the guard rails against silent regressions
+    in the dip/rally/sequence/recovery math."""
+
+    def _make_paths(self, seed: int = 42, n_paths: int = 5000, n_days: int = 30,
+                    sigma_annual: float = 0.30, drift_annual: float = 0.10,
+                    s0: float = 100.0) -> np.ndarray:
+        """Generate a fresh set of MC paths for property testing."""
+        rng = np.random.default_rng(seed)
+        paths, _ = monte_carlo._simulate_paths(
+            s0=s0, drift_annual=drift_annual, sigma_annual=sigma_annual,
+            n_paths=n_paths, n_days=n_days, rng=rng,
+            earnings_jump_day=None, earnings_reactions=[],
+        )
+        return paths
+
+    def test_dip_below_rally_above_current(self):
+        """The 70%-touch dip must be ≤ current; the 70%-touch rally ≥
+        current. Otherwise the percentile math is inverted."""
+        paths = self._make_paths()
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        self.assertLessEqual(out["dip_entry"], 100.0,
+            f"dip_entry {out['dip_entry']} > current 100")
+        self.assertGreaterEqual(out["rally_exit"], 100.0,
+            f"rally_exit {out['rally_exit']} < current 100")
+
+    def test_sequence_prob_bounds(self):
+        """P(dip-then-rally) and P(miss-the-dip) must each be in [0, 1]."""
+        paths = self._make_paths()
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        for key in ("sequence_prob", "miss_dip_prob"):
+            v = out[key]
+            self.assertGreaterEqual(v, 0.0, f"{key} = {v} < 0")
+            self.assertLessEqual(v, 1.0, f"{key} = {v} > 1")
+
+    def test_sequence_prob_below_both_touch_probs(self):
+        """P(dip-then-rally) ≤ min(P(dip touched), P(rally touched)).
+        At the 70% configured touch confidence, both individual touch
+        probabilities are ~70% by construction, so sequence prob must
+        be ≤ 0.70 (typically much lower due to ordering constraint)."""
+        paths = self._make_paths()
+        n_paths, n_days = paths.shape
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        below_dip = (paths <= out["dip_entry"]).any(axis=1).mean()
+        above_rally = (paths >= out["rally_exit"]).any(axis=1).mean()
+        self.assertLessEqual(out["sequence_prob"], min(below_dip, above_rally) + 1e-9,
+            f"sequence_prob {out['sequence_prob']} exceeds min touch prob "
+            f"({below_dip}, {above_rally}) — ordering constraint violated")
+
+    def test_swing_stop_below_dip_when_defined(self):
+        """When a swing stop is defined, it must be strictly below
+        dip-entry. A stop at or above dip would be nonsensical (you'd
+        exit before the trade ever started)."""
+        paths = self._make_paths(sigma_annual=0.50, n_days=60)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        stop = out["swing_stop"]["primary"]
+        if stop is not None:
+            self.assertLess(stop, out["dip_entry"],
+                f"swing_stop {stop} ≥ dip_entry {out['dip_entry']}")
+
+    def test_recovery_prob_at_stop_meets_threshold(self):
+        """When a swing stop is defined, the recovery probability at
+        that level must be ≥ the configured recovery_confidence
+        threshold. This is the defining property of the stop."""
+        paths = self._make_paths(sigma_annual=0.50, n_days=60)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        stop_blk = out["swing_stop"]
+        if stop_blk["primary"] is not None:
+            self.assertGreaterEqual(
+                stop_blk["recovery_prob_at_stop"],
+                stop_blk["recovery_threshold"] - 1e-9,
+                f"recovery_prob_at_stop {stop_blk['recovery_prob_at_stop']} "
+                f"< threshold {stop_blk['recovery_threshold']}"
+            )
+
+    def test_reward_to_risk_math(self):
+        """R:R must equal (rally - dip) / (dip - swing_stop) when both
+        are defined. Off-by-one or sign errors here would silently mis-
+        calibrate the ACTIONABLE verdict."""
+        paths = self._make_paths(sigma_annual=0.50, n_days=60)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        stop = out["swing_stop"]["primary"]
+        if stop is not None and out["dip_entry"] > stop:
+            expected_rr = (out["rally_exit"] - out["dip_entry"]) / (out["dip_entry"] - stop)
+            self.assertAlmostEqual(out["reward_to_risk"], expected_rr, places=6,
+                msg=f"R:R math wrong: got {out['reward_to_risk']}, expected {expected_rr}")
+
+    def test_yield_math(self):
+        """Yield% = (rally - dip) / dip × 100, by definition."""
+        paths = self._make_paths()
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        expected = (out["rally_exit"] - out["dip_entry"]) / out["dip_entry"] * 100.0
+        self.assertAlmostEqual(out["yield_pct"], expected, places=6)
+
+    def test_verdict_actionable_iff_all_gates_pass(self):
+        """ACTIONABLE requires ALL four gates pass (plus swing_stop defined).
+        Any single failure must produce NO_ACTIONABLE_SWING. This guards
+        against a silent partial-pass that would slip a marginal setup
+        through."""
+        paths = self._make_paths(sigma_annual=0.50, n_days=60)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        passes = out["components"]["passes"]
+        label = out["verdict"]["label"]
+        all_pass = all(passes.values())
+        if all_pass:
+            self.assertEqual(label, "ACTIONABLE",
+                f"all gates pass but verdict is {label}: {passes}")
+        else:
+            self.assertEqual(label, "NO_ACTIONABLE_SWING",
+                f"some gates fail but verdict is {label}: {passes}")
+
+    def test_low_vol_paths_produce_no_actionable_swing(self):
+        """A very-low-vol synthetic stock (paths cluster tightly around
+        current) must NOT fire ACTIONABLE — the dip and rally levels
+        will be too close to current to satisfy the min-magnitude gates.
+        This is the canonical 'sleepy stock' regression."""
+        # 5% annualized vol — extremely tight; basically a money-market
+        paths = self._make_paths(sigma_annual=0.05, n_days=30)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        self.assertEqual(out["verdict"]["label"], "NO_ACTIONABLE_SWING",
+            f"Low-vol stock should not be ACTIONABLE; got {out['verdict']['label']} "
+            f"with dip={out['dip_entry']:.2f}, rally={out['rally_exit']:.2f}")
+
+    def test_reproducibility_under_same_seed(self):
+        """Same paths in must produce identical swing-mode outputs.
+        REGRESSION: any non-determinism (unsorted dict iteration,
+        unseeded RNG, etc.) should fail this."""
+        paths1 = self._make_paths(seed=99)
+        paths2 = self._make_paths(seed=99)
+        out1 = swing_mode.compute_for_horizon(paths1, current_price=100.0)
+        out2 = swing_mode.compute_for_horizon(paths2, current_price=100.0)
+        self.assertEqual(out1["sequence_prob"], out2["sequence_prob"])
+        self.assertEqual(out1["dip_entry"], out2["dip_entry"])
+        self.assertEqual(out1["rally_exit"], out2["rally_exit"])
+        self.assertEqual(out1["swing_stop"]["primary"], out2["swing_stop"]["primary"])
+        self.assertEqual(out1["verdict"]["label"], out2["verdict"]["label"])
+
+    def test_dip_at_70_pctile_means_70_pct_paths_touch(self):
+        """The dip-entry at the 70% touch confidence MUST be touched by
+        approximately 70% of paths (within statistical noise). This
+        verifies the percentile interpretation: percentile(path_mins,
+        70) is the level 70% of mins are ≤. Mathematically tight
+        invariant, not just a heuristic."""
+        paths = self._make_paths(n_paths=10000)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        actual_touch_frac = (paths <= out["dip_entry"]).any(axis=1).mean()
+        # Should be ~0.70 within ~1% (10k paths gives SE ~0.0046)
+        self.assertAlmostEqual(actual_touch_frac, 0.70, delta=0.02,
+            msg=f"dip touched by {actual_touch_frac*100:.1f}% of paths "
+                f"vs configured 70%")
 
 
 class TestPDEInvariants(unittest.TestCase):
