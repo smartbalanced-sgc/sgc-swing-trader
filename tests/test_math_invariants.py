@@ -240,22 +240,80 @@ class TestSwingModeInvariants(unittest.TestCase):
         expected = (out["rally_exit"] - out["dip_entry"]) / out["dip_entry"] * 100.0
         self.assertAlmostEqual(out["yield_pct"], expected, places=6)
 
-    def test_verdict_actionable_iff_all_gates_pass(self):
-        """ACTIONABLE requires ALL four gates pass (plus swing_stop defined).
-        Any single failure must produce NO_ACTIONABLE_SWING. This guards
-        against a silent partial-pass that would slip a marginal setup
-        through."""
+    def test_verdict_three_tier_classification(self):
+        """Three-tier verdict logic must classify each setup correctly:
+          ACTIONABLE  — all gates pass
+          WATCHABLE   — exactly 1 numeric gate fails AND sequence_prob
+                        passes AND swing_stop is defined
+          NO_SWING    — multiple gates fail, or sequence_prob fails,
+                        or swing_stop undefined
+        Guards against a silent partial-pass slipping through, AND
+        guards against WATCHABLE firing when conviction (sequence
+        prob) isn't there."""
         paths = self._make_paths(sigma_annual=0.50, n_days=60)
         out = swing_mode.compute_for_horizon(paths, current_price=100.0)
         passes = out["components"]["passes"]
         label = out["verdict"]["label"]
-        all_pass = all(passes.values())
-        if all_pass:
+        numeric_gates = ("dip_below_current_min", "rally_above_current_min",
+                         "yield_min", "sequence_prob_min", "reward_to_risk_min")
+        n_fail = sum(1 for g in numeric_gates if not passes[g])
+        stop_ok = passes["swing_stop_defined"]
+        seq_ok = passes["sequence_prob_min"]
+
+        if n_fail == 0 and stop_ok:
             self.assertEqual(label, "ACTIONABLE",
                 f"all gates pass but verdict is {label}: {passes}")
+        elif n_fail == 1 and seq_ok and stop_ok:
+            self.assertEqual(label, "WATCHABLE",
+                f"exactly 1 fail with sequence_prob+stop ok but verdict "
+                f"is {label}: {passes}")
         else:
             self.assertEqual(label, "NO_ACTIONABLE_SWING",
-                f"some gates fail but verdict is {label}: {passes}")
+                f"{n_fail} gates fail, seq_ok={seq_ok}, stop_ok={stop_ok} "
+                f"but verdict is {label}: {passes}")
+
+    def test_watchable_requires_sequence_prob_to_pass(self):
+        """WATCHABLE is the conviction-anchored near-miss tier. If
+        sequence_prob fails, the verdict must NEVER be WATCHABLE —
+        regardless of how many other gates pass. Without sequence
+        prob the trade has no conviction; surfacing it as WATCHABLE
+        would be misleading."""
+        # Low-vol synthetic that produces a low sequence prob
+        paths = self._make_paths(sigma_annual=0.10, n_days=30)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        if not out["components"]["passes"]["sequence_prob_min"]:
+            self.assertNotEqual(out["verdict"]["label"], "WATCHABLE",
+                f"sequence_prob fails but verdict is WATCHABLE — "
+                f"violates conviction-anchor rule")
+
+    def test_flip_hints_present_for_each_failing_gate(self):
+        """Every failing gate (except ACTIONABLE) must produce a flip
+        hint. Missing hints means the user has no actionable feedback
+        on what would change the verdict."""
+        paths = self._make_paths(sigma_annual=0.50, n_days=60)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        passes = out["components"]["passes"]
+        hints = out["flip_hints"]
+        if out["verdict"]["label"] == "ACTIONABLE":
+            self.assertEqual(hints, [], "ACTIONABLE setups should have no flip hints")
+        else:
+            gates_with_hints = {h["gate"] for h in hints}
+            failed_gates = {g for g, p in passes.items() if not p}
+            self.assertEqual(gates_with_hints, failed_gates,
+                f"Mismatch: failed={failed_gates}, hinted={gates_with_hints}")
+
+    def test_flip_hint_structure(self):
+        """Every flip hint must have the required keys (gate, current,
+        threshold, hint) so the dashboard can render them safely
+        without crashing on a missing field."""
+        paths = self._make_paths(sigma_annual=0.05, n_days=30)
+        out = swing_mode.compute_for_horizon(paths, current_price=100.0)
+        for h in out["flip_hints"]:
+            for key in ("gate", "current", "threshold", "hint"):
+                self.assertIn(key, h, f"flip hint missing key '{key}': {h}")
+            self.assertIsInstance(h["hint"], str)
+            self.assertGreater(len(h["hint"]), 20,
+                f"flip hint text suspiciously short: {h['hint']}")
 
     def test_low_vol_paths_produce_no_actionable_swing(self):
         """A very-low-vol synthetic stock (paths cluster tightly around

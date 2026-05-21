@@ -45,6 +45,12 @@ _MIN_RALLY_PCT = _SM.min_rally_above_current_pct
 _TAIL_PCTILE = _SM.tail_percentile
 _DISAGREE_PCT = _SM.cross_check_disagreement_pct
 
+# A WATCHABLE setup is one numeric gate short of ACTIONABLE, where
+# the conviction anchor (sequence_prob) and the swing_stop are both
+# in place. Pure-counting rule: exactly 1 of the 5 numeric gates
+# fails, AND sequence_prob passes, AND swing_stop is defined.
+_WATCHABLE_MAX_FAILURES = 1
+
 
 def compute_for_horizon(paths_h: np.ndarray, current_price: float) -> dict:
     """All swing-mode metrics for one horizon.
@@ -110,7 +116,20 @@ def compute_for_horizon(paths_h: np.ndarray, current_price: float) -> dict:
         if current_price > 0 else 0.0
     )
 
-    # --- Verdict: all four gates must pass ---
+    # --- Verdict: three tiers ---
+    # ACTIONABLE  = trade-ready today (all gates pass)
+    # WATCHABLE   = near-miss; sequence_prob is high enough that the
+    #               setup has real conviction, only ONE gate fails.
+    #               Surfaces tomorrow's potential ACTIONABLE so the
+    #               user can refresh and watch — classic swing-scouting.
+    # NO_SWING    = genuinely no setup; multiple gates fail.
+    numeric_gates = (
+        "dip_below_current_min",
+        "rally_above_current_min",
+        "yield_min",
+        "sequence_prob_min",
+        "reward_to_risk_min",
+    )
     passes = {
         "dip_below_current_min": dip_below_current_pct >= _MIN_DIP_PCT,
         "rally_above_current_min": rally_above_current_pct >= _MIN_RALLY_PCT,
@@ -119,21 +138,37 @@ def compute_for_horizon(paths_h: np.ndarray, current_price: float) -> dict:
         "reward_to_risk_min": reward_to_risk >= _MIN_RR,
         "swing_stop_defined": swing_stop is not None,
     }
-    all_pass = all(passes.values())
+    n_failures = sum(1 for g in numeric_gates if not passes[g])
 
-    if all_pass:
-        verdict_label = "ACTIONABLE"
-        verdict_reason = "all swing conditions met"
-    else:
-        verdict_label = "NO_ACTIONABLE_SWING"
-        verdict_reason = _explain_failures(
-            passes=passes,
-            dip_pct=dip_below_current_pct,
-            rally_pct=rally_above_current_pct,
-            yield_pct=yield_pct,
-            sequence_prob=sequence_prob,
-            reward_to_risk=reward_to_risk,
-        )
+    verdict_label, verdict_reason = _classify_verdict(
+        passes=passes,
+        n_failures=n_failures,
+        sequence_passes=passes["sequence_prob_min"],
+        stop_defined=passes["swing_stop_defined"],
+        dip_pct=dip_below_current_pct,
+        rally_pct=rally_above_current_pct,
+        yield_pct=yield_pct,
+        sequence_prob=sequence_prob,
+        reward_to_risk=reward_to_risk,
+    )
+
+    # --- Flip hints: what would need to change for each failing gate ---
+    # Surfaces actionable intelligence to the user: "your trade is one
+    # X away from ACTIONABLE — set an alert here." Computed for all
+    # non-ACTIONABLE verdicts so the user always knows what's missing.
+    flip_hints = _compute_flip_hints(
+        passes=passes,
+        verdict_label=verdict_label,
+        current_price=current_price,
+        dip_entry=dip_entry,
+        rally_exit=rally_exit,
+        swing_stop=swing_stop,
+        dip_pct=dip_below_current_pct,
+        rally_pct=rally_above_current_pct,
+        yield_pct=yield_pct,
+        sequence_prob=sequence_prob,
+        reward_to_risk=reward_to_risk,
+    )
 
     return {
         "dip_entry": dip_entry,
@@ -164,7 +199,9 @@ def compute_for_horizon(paths_h: np.ndarray, current_price: float) -> dict:
         "verdict": {
             "label": verdict_label,
             "reason": verdict_reason,
+            "n_failed_gates": n_failures,
         },
+        "flip_hints": flip_hints,
         "thresholds_used": {
             "touch_confidence": _TOUCH_CONF,
             "recovery_confidence": _RECOVERY_CONF,
@@ -335,7 +372,58 @@ def _cross_check_disagrees(
     return diff_pct > threshold_pct
 
 
-# ---------- failure-reason text ----------
+# ---------- verdict classification + failure-reason text ----------
+
+
+def _classify_verdict(
+    passes: dict,
+    n_failures: int,
+    sequence_passes: bool,
+    stop_defined: bool,
+    dip_pct: float,
+    rally_pct: float,
+    yield_pct: float,
+    sequence_prob: float,
+    reward_to_risk: float,
+) -> tuple[str, str]:
+    """Classify a swing-mode setup into one of three tiers:
+
+      ACTIONABLE  — all gates pass; trade-ready today
+      WATCHABLE   — near-miss; high conviction (sequence prob clears),
+                    only 1 numeric gate fails. Surfaces tomorrow's
+                    potential ACTIONABLE for daily-refresh scouting.
+      NO_ACTIONABLE_SWING — multiple gates fail; no real setup
+
+    Returns (label, reason_text). The reason text is plain English,
+    suitable for direct dashboard rendering.
+    """
+    failure_text = _explain_failures(
+        passes=passes,
+        dip_pct=dip_pct,
+        rally_pct=rally_pct,
+        yield_pct=yield_pct,
+        sequence_prob=sequence_prob,
+        reward_to_risk=reward_to_risk,
+    )
+
+    if n_failures == 0 and stop_defined:
+        return "ACTIONABLE", "all swing conditions met"
+
+    # WATCHABLE — needs all of:
+    #   - exactly 1 numeric gate failing (4 of 5 pass)
+    #   - sequence_prob passes (this is the "high conviction" anchor)
+    #   - swing_stop defined (else there's no trade to plan)
+    if (
+        n_failures <= _WATCHABLE_MAX_FAILURES
+        and sequence_passes
+        and stop_defined
+    ):
+        return (
+            "WATCHABLE",
+            f"near-miss: {failure_text}",
+        )
+
+    return "NO_ACTIONABLE_SWING", failure_text
 
 
 def _explain_failures(
@@ -378,3 +466,154 @@ def _explain_failures(
             f"recovers < {_RECOVERY_CONF * 100:.0f}%"
         )
     return "; ".join(parts) if parts else "unknown failure"
+
+
+# ---------- flip hints — "what would change this verdict" per gate ----------
+
+
+def _compute_flip_hints(
+    passes: dict,
+    verdict_label: str,
+    current_price: float,
+    dip_entry: float,
+    rally_exit: float,
+    swing_stop: float | None,
+    dip_pct: float,
+    rally_pct: float,
+    yield_pct: float,
+    sequence_prob: float,
+    reward_to_risk: float,
+) -> list[dict]:
+    """For each failing gate, compute a structured hint describing
+    what would need to move for that gate to flip — and ultimately
+    what would shift the verdict toward ACTIONABLE.
+
+    Returns a list of dicts with keys:
+      gate       — internal gate name (machine-readable)
+      current    — current value of the gated metric
+      threshold  — the threshold being compared against
+      hint       — plain-English explanation of what would flip it
+
+    Empty list for ACTIONABLE setups (nothing to flip).
+    """
+    if verdict_label == "ACTIONABLE":
+        return []
+
+    hints: list[dict] = []
+
+    if not passes["dip_below_current_min"]:
+        # To deepen the dip below current, either price would have to
+        # rise (refreshing the 70%-touch math), or vol would have to
+        # widen (paths spread further down).
+        target_dip = current_price * (1.0 - _MIN_DIP_PCT / 100.0)
+        gap_pct = _MIN_DIP_PCT - dip_pct
+        hints.append({
+            "gate": "dip_below_current_min",
+            "current": dip_pct,
+            "threshold": _MIN_DIP_PCT,
+            "hint": (
+                f"Dip is {dip_pct:.1f}% below current — needs {_MIN_DIP_PCT}%+. "
+                f"Would flip if price rises ~{gap_pct:.1f}% (refreshing the "
+                f"70%-touch dip math) so dip-entry deepens to roughly "
+                f"${target_dip:.2f}, OR if implied vol widens enough that "
+                f"the dip percentile extends further down."
+            ),
+        })
+
+    if not passes["rally_above_current_min"]:
+        target_rally = current_price * (1.0 + _MIN_RALLY_PCT / 100.0)
+        gap_pct = _MIN_RALLY_PCT - rally_pct
+        hints.append({
+            "gate": "rally_above_current_min",
+            "current": rally_pct,
+            "threshold": _MIN_RALLY_PCT,
+            "hint": (
+                f"Rally is {rally_pct:.1f}% above current — needs {_MIN_RALLY_PCT}%+. "
+                f"Would flip if price drops ~{gap_pct:.1f}% or if vol widens "
+                f"so the rally percentile extends further up to roughly "
+                f"${target_rally:.2f}."
+            ),
+        })
+
+    if not passes["yield_min"]:
+        gap = _MIN_YIELD_PCT - yield_pct
+        hints.append({
+            "gate": "yield_min",
+            "current": yield_pct,
+            "threshold": _MIN_YIELD_PCT,
+            "hint": (
+                f"Yield (dip→rally) is {yield_pct:.1f}% — needs {_MIN_YIELD_PCT}%+. "
+                f"This is a structural property of the stock's volatility "
+                f"profile: low-vol names rarely produce {_MIN_YIELD_PCT}%+ "
+                f"swings in the horizon. Would flip only if implied vol "
+                f"rises (gap to close: {gap:.1f} pp)."
+            ),
+        })
+
+    if not passes["sequence_prob_min"]:
+        gap_pp = (_MIN_SEQ - sequence_prob) * 100
+        hints.append({
+            "gate": "sequence_prob_min",
+            "current": sequence_prob,
+            "threshold": _MIN_SEQ,
+            "hint": (
+                f"P(dip-then-rally) is {sequence_prob*100:.0f}% — needs "
+                f"{_MIN_SEQ*100:.0f}%+. Gap is {gap_pp:.0f} percentage "
+                f"points. Under pure GBM dynamics, sequence prob is hard "
+                f"to push higher without a real catalyst (earnings bounce, "
+                f"mean-reversion regime, sector rotation). Refresh after "
+                f"the next material event."
+            ),
+        })
+
+    if not passes["reward_to_risk_min"]:
+        # What stop tightening would close the R:R gap?
+        if swing_stop is not None and dip_entry > 0:
+            reward = rally_exit - dip_entry
+            # R:R = reward / risk; we need risk such that reward/risk ≥ target
+            target_risk = reward / _MIN_RR
+            target_stop = dip_entry - target_risk
+            gap_pct = (target_stop - swing_stop) / dip_entry * 100
+            hints.append({
+                "gate": "reward_to_risk_min",
+                "current": reward_to_risk,
+                "threshold": _MIN_RR,
+                "hint": (
+                    f"R:R is {reward_to_risk:.2f}× — needs {_MIN_RR:.1f}×+. "
+                    f"Stop would need to tighten from ${swing_stop:.2f} to "
+                    f"~${target_stop:.2f} (≈{gap_pct:+.1f}% closer to dip) "
+                    f"for R:R to clear. Calibration knob: raise "
+                    f"recovery_confidence (currently {_RECOVERY_CONF:.2f}) "
+                    f"in config/thresholds.yml. Alternatively, this flips "
+                    f"naturally if rally extends or dip deepens via fresh "
+                    f"MC data."
+                ),
+            })
+        else:
+            hints.append({
+                "gate": "reward_to_risk_min",
+                "current": reward_to_risk,
+                "threshold": _MIN_RR,
+                "hint": (
+                    f"R:R is {reward_to_risk:.2f}× — needs {_MIN_RR:.1f}×+. "
+                    "Swing stop is undefined, so risk distance can't be "
+                    "computed reliably."
+                ),
+            })
+
+    if not passes["swing_stop_defined"]:
+        hints.append({
+            "gate": "swing_stop_defined",
+            "current": None,
+            "threshold": _RECOVERY_CONF,
+            "hint": (
+                f"No safe stop level below dip — even the broadest cohort "
+                f"recovers < {_RECOVERY_CONF*100:.0f}%. This means the path "
+                f"distribution is heavily skewed downward (paths fall and "
+                f"rarely come back). Stop is undefined; trade is too risky "
+                f"to plan around the dip-entry. Refresh after any material "
+                f"shift in drift or vol."
+            ),
+        })
+
+    return hints

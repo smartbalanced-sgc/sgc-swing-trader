@@ -463,10 +463,12 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .swing-mode .sm-explainer { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.55; }
 .swing-mode .sm-horizon { background: white; border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px; margin: 10px 0; }
 .swing-mode .sm-horizon.actionable { border-left: 4px solid var(--ok); }
+.swing-mode .sm-horizon.watchable { border-left: 4px solid var(--warn); }
 .swing-mode .sm-horizon.no-swing { border-left: 4px solid #cbd5e1; }
 .swing-mode .sm-hhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .swing-mode .sm-hlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); }
 .swing-mode .sm-verdict.actionable { color: var(--ok); font-size: 12.5px; }
+.swing-mode .sm-verdict.watchable { color: var(--warn); font-size: 12.5px; }
 .swing-mode .sm-verdict.no-swing { color: var(--muted); font-size: 12.5px; }
 .swing-mode .sm-vsub { font-size: 11.5px; color: var(--text-soft); margin-bottom: 12px; line-height: 1.45; }
 .swing-mode .sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
@@ -478,6 +480,14 @@ a.t212-link::after { content: " ↗"; font-size: 0.75em; color: var(--muted); }
 .swing-mode .sm-stop .sm-stopkey { font-weight: 600; color: var(--text); margin-right: 4px; }
 .swing-mode .sm-stop .sm-cross { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
 .swing-mode .sm-stop .warn { color: #b45309; }
+/* Flip hints — "what would change this verdict" per failing gate */
+.swing-mode .sm-flip { margin-top: 12px; padding: 10px 12px; background: #fffbeb; border-radius: 4px; border-left: 3px solid var(--warn); }
+.swing-mode .sm-flip-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn); margin-bottom: 6px; }
+.swing-mode .sm-flip-list { list-style: none; padding: 0; margin: 0; }
+.swing-mode .sm-flip-list .fh-item { padding: 5px 0; border-top: 1px dotted #fde68a; font-size: 12px; line-height: 1.5; }
+.swing-mode .sm-flip-list .fh-item:first-child { border-top: 0; }
+.swing-mode .sm-flip-list .fh-gate { display: inline-block; font-weight: 600; color: #92400e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; margin-right: 6px; padding: 2px 6px; background: #fef3c7; border-radius: 3px; }
+.swing-mode .sm-flip-list .fh-text { color: var(--text-soft); }
 
 /* ---------- 60-day horizon collapse — both Action and Swing panels ---------- */
 /* Secondary horizon hides its detail by default; summary shows verdict
@@ -540,6 +550,10 @@ details.sm-collapse.actionable > summary {
   background: linear-gradient(90deg, #dcfce7 0%, #fdf7f1 60%);
   border-bottom: 2px solid var(--ok);
 }
+details.sm-collapse.watchable > summary {
+  background: linear-gradient(90deg, #fef3c7 0%, #fdf7f1 60%);
+  border-bottom: 2px solid var(--warn);
+}
 details.sm-collapse.no-swing > summary {
   background: linear-gradient(90deg, #f3f4f6 0%, #fdf7f1 60%);
 }
@@ -552,6 +566,7 @@ details.sm-collapse.no-swing > summary {
   padding: 3px 8px; border-radius: 4px;
 }
 .sm-cverdict.actionable { background: var(--ok); color: white; }
+.sm-cverdict.watchable { background: var(--warn); color: white; }
 .sm-cverdict.no-swing { background: #cbd5e1; color: #475569; }
 .sm-cbody { padding: 0 14px 14px; background: white; }
 /* action 60d collapse — verdict colour band */
@@ -1727,8 +1742,8 @@ def _render_swing_mode(snap: dict) -> str:
             # headline without expanding. Per CLAUDE.md, the body still
             # contains every metric — collapse is purely cosmetic.
             verdict_label = (blk.get("verdict") or {}).get("label", "NO_ACTIONABLE_SWING")
-            verdict_class = "actionable" if verdict_label == "ACTIONABLE" else "no-swing"
-            summary_text = "ACTIONABLE SWING" if verdict_label == "ACTIONABLE" else "NO ACTIONABLE SWING"
+            verdict_class = _swing_verdict_class(verdict_label)
+            summary_text = _swing_verdict_text(verdict_label)
             horizon_blocks.append(
                 f"""
 <details class='sm-collapse {verdict_class}'>
@@ -1772,7 +1787,7 @@ def _render_swing_horizon(horizon_days: int, blk: dict, current: float) -> str:
     """Render one horizon's swing-mode block."""
     verdict_label = (blk.get("verdict") or {}).get("label", "NO_ACTIONABLE_SWING")
     verdict_reason = (blk.get("verdict") or {}).get("reason", "")
-    verdict_class = "actionable" if verdict_label == "ACTIONABLE" else "no-swing"
+    verdict_class = _swing_verdict_class(verdict_label)
 
     dip = blk.get("dip_entry") or 0.0
     rally = blk.get("rally_exit") or 0.0
@@ -1811,11 +1826,37 @@ def _render_swing_horizon(horizon_days: int, blk: dict, current: float) -> str:
     )
 
     if verdict_label == "ACTIONABLE":
-        verdict_text = f"<strong>ACTIONABLE SWING</strong>"
-        verdict_sub = f"all four gates pass"
+        verdict_text = "<strong>ACTIONABLE SWING</strong>"
+        verdict_sub = "all swing conditions met — trade-ready"
+    elif verdict_label == "WATCHABLE":
+        verdict_text = "<strong>WATCHABLE — NEAR MISS</strong>"
+        verdict_sub = (
+            f"{html.escape(verdict_reason)} — refresh daily; a small move "
+            "in price or vol could flip this to ACTIONABLE"
+        )
     else:
-        verdict_text = f"<strong>NO ACTIONABLE SWING</strong>"
+        verdict_text = "<strong>NO ACTIONABLE SWING</strong>"
         verdict_sub = html.escape(verdict_reason)
+
+    # Flip hints — "what would need to change" for each failing gate.
+    # Shown for WATCHABLE and NO_ACTIONABLE; empty for ACTIONABLE.
+    flip_html = ""
+    flip_hints = blk.get("flip_hints") or []
+    if flip_hints:
+        items = "".join(
+            f"<li class='fh-item'><span class='fh-gate'>{html.escape(_gate_label(h['gate']))}</span>"
+            f"<span class='fh-text'>{html.escape(h['hint'])}</span></li>"
+            for h in flip_hints
+        )
+        flip_label = (
+            "How this flips to ACTIONABLE"
+            if verdict_label == "WATCHABLE"
+            else "What's missing"
+        )
+        flip_html = (
+            f"<div class='sm-flip'><div class='sm-flip-label'>{flip_label}</div>"
+            f"<ul class='sm-flip-list'>{items}</ul></div>"
+        )
 
     return f"""
 <div class='sm-horizon {verdict_class}'>
@@ -1862,8 +1903,41 @@ def _render_swing_horizon(horizon_days: int, blk: dict, current: float) -> str:
     <span class='sm-stopkey'>Swing stop (below dip):</span> {stop_html}
     <span class='sm-cross'>{cross_html}</span>
   </div>
+  {flip_html}
 </div>
 """
+
+
+def _swing_verdict_class(label: str) -> str:
+    """Map a swing verdict label to its CSS class. Centralised so the
+    collapsed-state summary and the expanded panel use the same colour
+    mapping (avoids drift)."""
+    if label == "ACTIONABLE":
+        return "actionable"
+    if label == "WATCHABLE":
+        return "watchable"
+    return "no-swing"
+
+
+def _swing_verdict_text(label: str) -> str:
+    """Short label for collapsed summaries."""
+    if label == "ACTIONABLE":
+        return "ACTIONABLE SWING"
+    if label == "WATCHABLE":
+        return "WATCHABLE — NEAR MISS"
+    return "NO ACTIONABLE SWING"
+
+
+def _gate_label(gate: str) -> str:
+    """Human-readable name for a failing gate (used in flip hints UI)."""
+    return {
+        "dip_below_current_min": "Dip depth",
+        "rally_above_current_min": "Rally height",
+        "yield_min": "Yield",
+        "sequence_prob_min": "Sequence probability",
+        "reward_to_risk_min": "Reward/Risk",
+        "swing_stop_defined": "Swing stop",
+    }.get(gate, gate)
 
 
 def _render_action(snap: dict, watchlist_entry: dict) -> str:

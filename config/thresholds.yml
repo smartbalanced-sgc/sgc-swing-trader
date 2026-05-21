@@ -631,15 +631,22 @@ swing_mode:
   # fell to that level, at least N% recovered back to dip-entry
   # within the horizon.
   #
-  # Bumped from an initial 0.25 to 0.60 after first-real-data review
-  # exposed the problem: at 0.25, the method correctly finds the
-  # deepest "still defensible" level, but for high-vol names that
-  # level is 40-60% below dip — wider than any real swing trader
-  # would ever accept. At 0.60 the stop demands "majority of paths
-  # that fell here recovered" — a tighter, more practical stop that
-  # produces realistic R:R numbers. The principled method survives;
-  # the bar is just much higher.
-  recovery_confidence: 0.60
+  # Calibration history:
+  #   0.25 — initial. Stops landed 40-60% below dip — absurd.
+  #   0.60 — bumped after R:R collapsed at 0.25. Stops 15-30% below
+  #          dip. Better but R:R still compressed on high-vol names
+  #          (PL at 1.3x).
+  #   0.75 — REVISED UP for vol-friendly swing-trade philosophy. The
+  #          stop now demands "3-out-of-4 paths that fell here
+  #          recovered". This is a CUT-EARLY stop — fires on common
+  #          pullbacks that 75% of futures would have recovered from.
+  #          Accepts more whipsaws (false stop-outs) in exchange for
+  #          small per-trade losses. Aligns with the trading mantra
+  #          "cut losses quick, let winners run" — the right call for
+  #          a user who's vol-friendly but capital-preservation-focused.
+  #          Stops land 5-15% below dip — matches what real swing
+  #          traders set. Restores R:R math (PL 30d clears 2.0x).
+  recovery_confidence: 0.75
 
   # Minimum cohort size (number of MC paths that must reach a given
   # depth) before that depth is considered statistically reliable
