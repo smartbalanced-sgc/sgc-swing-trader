@@ -1,0 +1,1580 @@
+{
+  "analytic_verifier": {
+    "fetched_at": "2026-05-26T10:34:52+00:00",
+    "horizons": {
+      "30": {
+        "agree_ev": true,
+        "agree_p_stop": true,
+        "agree_p_target": true,
+        "delta_ev": 0.0010183690957714427,
+        "delta_p_stop": 0.0018152691665694887,
+        "delta_p_target": 0.0026747311849960043,
+        "mc_ev": 0.011623655153588977,
+        "mc_p_stop": 0.496,
+        "mc_p_target": 0.28288,
+        "pde_ev": 0.010605286057817534,
+        "pde_p_stop": 0.4978152691665695,
+        "pde_p_target": 0.280205268815004,
+        "users": {
+          "aidy": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.10183690957714428,
+            "delta_p_stop_pp": 0.18152691665694887,
+            "delta_p_target_pp": 0.2674731184996004,
+            "mc_ev_gbm_only_pct": 1.1623655153588976,
+            "mc_p_stop_gbm_only": 0.496,
+            "mc_p_target_gbm_only": 0.28288,
+            "pde_ev_pct": 1.0605286057817533,
+            "pde_p_stop": 0.4978152691665695,
+            "pde_p_target": 0.280205268815004
+          },
+          "jesse": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.07980830125426004,
+            "delta_p_stop_pp": 0.18352691665695087,
+            "delta_p_target_pp": 0.18947311849960013,
+            "mc_ev_gbm_only_pct": 1.1403369070360134,
+            "mc_p_stop_gbm_only": 0.49598,
+            "mc_p_target_gbm_only": 0.2821,
+            "pde_ev_pct": 1.0605286057817533,
+            "pde_p_stop": 0.4978152691665695,
+            "pde_p_target": 0.280205268815004
+          }
+        }
+      },
+      "60": {
+        "agree_ev": true,
+        "agree_p_stop": true,
+        "agree_p_target": true,
+        "delta_ev": 0.0011827211895784513,
+        "delta_p_stop": 0.001678847092355662,
+        "delta_p_target": 0.0029970675347967823,
+        "mc_ev": 0.01396929489225241,
+        "mc_p_stop": 0.59168,
+        "mc_p_target": 0.36898,
+        "pde_ev": 0.012786573702673958,
+        "pde_p_stop": 0.5933588470923556,
+        "pde_p_target": 0.3659829324652032,
+        "users": {
+          "aidy": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.11827211895784513,
+            "delta_p_stop_pp": 0.1678847092355662,
+            "delta_p_target_pp": 0.29970675347967823,
+            "mc_ev_gbm_only_pct": 1.3969294892252409,
+            "mc_p_stop_gbm_only": 0.59168,
+            "mc_p_target_gbm_only": 0.36898,
+            "pde_ev_pct": 1.2786573702673958,
+            "pde_p_stop": 0.5933588470923556,
+            "pde_p_target": 0.3659829324652032
+          },
+          "jesse": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.09454034136817217,
+            "delta_p_stop_pp": 0.1358847092355675,
+            "delta_p_target_pp": 0.2517067534796802,
+            "mc_ev_gbm_only_pct": 1.373197711635568,
+            "mc_p_stop_gbm_only": 0.592,
+            "mc_p_target_gbm_only": 0.3685,
+            "pde_ev_pct": 1.2786573702673958,
+            "pde_p_stop": 0.5933588470923556,
+            "pde_p_target": 0.3659829324652032
+          }
+        }
+      }
+    },
+    "max_p_target_delta_pp": 0.29970675347967823,
+    "status": "ok"
+  },
+  "as_of": "2026-05-22",
+  "catalyst": {
+    "analyst_revisions": {
+      "avg_pt": 131,
+      "consensus_snapshot": {
+        "analystRatingsBuy": 3,
+        "analystRatingsHold": 3,
+        "analystRatingsSell": 0,
+        "analystRatingsStrongBuy": 0,
+        "analystRatingsStrongSell": 1,
+        "date": "2026-05-01",
+        "symbol": "SATS"
+      },
+      "consensus_snapshot_30d_ago": {
+        "analystRatingsBuy": 3,
+        "analystRatingsHold": 2,
+        "analystRatingsSell": 0,
+        "analystRatingsStrongBuy": 0,
+        "analystRatingsStrongSell": 1,
+        "date": "2026-04-01",
+        "symbol": "SATS"
+      },
+      "count": 1,
+      "trend": "mixed: 3 buy-or-better, 3 hold, 1 sell-or-worse (of 7) \u2014 stable vs 30 days ago; 1 grade event(s) in last 30 days"
+    },
+    "as_of": "2026-05-22",
+    "distance_sessions": 45,
+    "engine_recommendation": "Earnings in 45 sessions (2026-07-30) \u2014 outside the 30-day horizon, inside the 60-day. 30-day verdict is unaffected; 60-day verdict registers the event as terminal-window variance.\n\nLast 4 earnings reactions averaged +0.1% (net positive), with mean absolute move 2.0%. That's the historical magnitude prior to consult when sizing risk around the upcoming event \u2014 implied-move estimates that diverge sharply from this band warrant a second look.\n\nShort interest 36.17% of float \u2014 very high (> 25% \u2014 high squeeze potential AND high downside conviction). Shorts increased +22% month-over-month \u2014 short-side conviction is building.\n\nAnalyst desk reads mixed: 3 buy-or-better, 3 hold, 1 sell-or-worse (of 7) \u2014 stable vs 30 days ago; 1 grade event(s) in last 30 days. Current consensus price target $131.\n\nNews flow: 3 headline(s) shown below covering the last 30 days. Skim for direction and concentration \u2014 a cluster of related stories often precedes a re-rating.",
+    "errors": [],
+    "fetched_at": "2026-05-26T10:34:48+00:00",
+    "historical_reactions": [
+      {
+        "date": "2026-05-11",
+        "reaction_pct": 0.19,
+        "type": "earnings"
+      },
+      {
+        "date": "2026-03-02",
+        "reaction_pct": -1.5,
+        "type": "earnings"
+      },
+      {
+        "date": "2025-11-06",
+        "reaction_pct": 4.01,
+        "type": "earnings"
+      },
+      {
+        "date": "2025-08-01",
+        "reaction_pct": -2.23,
+        "type": "earnings"
+      }
+    ],
+    "in_horizon_30d": false,
+    "in_horizon_60d": true,
+    "news_bullets": [
+      "2026-05-25 - fool.com: Want SpaceX Stock Before the IPO? This Under-the-Radar Play Gives You a Back Door In.",
+      "2026-05-22 - barrons.com: How High Can EchoStar Ride SpaceX?",
+      "2026-05-21 - gurufocus.com: SpaceX's Trillion-Dollar IPO Is Turning the Space Sector Into the Trade of 2026 -- Here Are Five Names Already Moving on It"
+    ],
+    "next_event": {
+      "date": "2026-07-30",
+      "type": "earnings"
+    },
+    "options_implied_move_detail": {
+      "atm_call_strike": 125.0,
+      "atm_put_strike": 125.0,
+      "call_mid": 18.5,
+      "expiry": "2026-08-21",
+      "implied_move_pct": 0.2954911433172303,
+      "put_mid": 18.2,
+      "spot": 124.2,
+      "straddle": 36.7
+    },
+    "options_implied_move_pct": 0.2954911433172303,
+    "price_target_consensus": {
+      "consensus": 136.4,
+      "high": 161,
+      "low": 110,
+      "median": 131
+    },
+    "proximity_haircut": 0.0,
+    "short_interest": {
+      "as_of_date": "2026-04-30",
+      "failure_reason": null,
+      "fetched_at": "2026-05-26T10:34:50+00:00",
+      "float_proxy_label": null,
+      "shares_short": 40708297,
+      "shares_short_prior_month": 33375803,
+      "short_percent_of_float": 0.36169997,
+      "short_ratio_days_to_cover": 6.72,
+      "source": "yfinance:fresh",
+      "stale_days": 0,
+      "ticker": "SATS",
+      "trend_month_over_month_pct": 21.96949089135024
+    },
+    "source": "live",
+    "status": "ok",
+    "ticker": "SATS"
+  },
+  "conviction": {
+    "fetched_at": "2026-05-26T10:34:52+00:00",
+    "horizons": {
+      "30": {
+        "aidy": {
+          "breakdown": {
+            "final_score": 0.11986288325317666,
+            "horizon_days": 30,
+            "layer1_edge": {
+              "components": [
+                {
+                  "contribution": 0.117855,
+                  "display": "0.28 - 0.50 = -0.21",
+                  "name": "P(target) - P(stop)",
+                  "normalized": 0.39285000000000003,
+                  "raw_value": -0.2143,
+                  "weight": 0.3
+                },
+                {
+                  "contribution": 0.015325981392418508,
+                  "display": "+0.07\u00d7 risk",
+                  "name": "EV (units of stop-distance)",
+                  "normalized": 0.02189425913202644,
+                  "raw_value": 0.06568277739607932,
+                  "weight": 0.7
+                }
+              ],
+              "lottery_filter_ev_norm": 0.06568277739607932,
+              "lottery_filter_failed": false,
+              "lottery_filter_prob_diff": -0.2143,
+              "lottery_filter_prob_diff_threshold": 0.0,
+              "score": 0.13318098139241852
+            },
+            "layer2_confidence": {
+              "haircuts": [
+                {
+                  "band": "no haircut",
+                  "detail": "\u0394 on P(target) = 0.3pp",
+                  "haircut": 0.0,
+                  "name": "MC \u2194 PDE agreement",
+                  "passed": true
+                },
+                {
+                  "band": "stable",
+                  "detail": "0 direction change(s) in last 5 nights",
+                  "haircut": 0.0,
+                  "name": "Trajectory stability",
+                  "passed": true
+                },
+                {
+                  "band": "matched",
+                  "detail": "anchor=C, measured=B, 0 consecutive night(s) mismatched",
+                  "haircut": 0.0,
+                  "name": "Tier classifier match",
+                  "passed": true
+                },
+                {
+                  "band": "moderate (750-1499 bars)",
+                  "detail": "1254 price bars (~5.0y of history)",
+                  "haircut": 0.1,
+                  "name": "Data depth",
+                  "passed": false
+                }
+              ],
+              "multiplier": 0.9
+            },
+            "layer3_vetoes": {
+              "all_checks": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 30d)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Catalyst proximity"
+                },
+                {
+                  "detail": "uptrend_noisy @ 41% confidence",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Regime"
+                },
+                {
+                  "at_dip": {
+                    "clears_veto": true,
+                    "premium_sigmas": -0.832762835522846,
+                    "threshold": 2.0
+                  },
+                  "detail": "-0.35\u03c3 vs FV range",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Fair value premium"
+                },
+                {
+                  "detail": "ADV $704.1M (floor $5.0M)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Liquidity floor (Tier C only)"
+                }
+              ],
+              "fired": []
+            },
+            "verdict_label": "WAIT",
+            "verdict_reason": "conviction 0.12 between WAIT floor and ENTER threshold"
+          },
+          "targets": {
+            "entry": null,
+            "stop": 102.9463129616908,
+            "target": 162.39236036888664
+          }
+        },
+        "jesse": {
+          "breakdown": {
+            "final_score": 0.11985464498349209,
+            "horizon_days": 30,
+            "layer1_edge": {
+              "components": [
+                {
+                  "contribution": 0.117849,
+                  "display": "0.28 - 0.50 = -0.21",
+                  "name": "P(target) - P(stop)",
+                  "normalized": 0.39283,
+                  "raw_value": -0.21434000000000003,
+                  "weight": 0.3
+                },
+                {
+                  "contribution": 0.015322827759435642,
+                  "display": "+0.07\u00d7 risk",
+                  "name": "EV (units of stop-distance)",
+                  "normalized": 0.021889753942050918,
+                  "raw_value": 0.06566926182615275,
+                  "weight": 0.7
+                }
+              ],
+              "lottery_filter_ev_norm": 0.06566926182615275,
+              "lottery_filter_failed": false,
+              "lottery_filter_prob_diff": -0.21434000000000003,
+              "lottery_filter_prob_diff_threshold": 0.0,
+              "score": 0.13317182775943565
+            },
+            "layer2_confidence": {
+              "haircuts": [
+                {
+                  "band": "no haircut",
+                  "detail": "\u0394 on P(target) = 0.2pp",
+                  "haircut": 0.0,
+                  "name": "MC \u2194 PDE agreement",
+                  "passed": true
+                },
+                {
+                  "band": "stable",
+                  "detail": "0 direction change(s) in last 5 nights",
+                  "haircut": 0.0,
+                  "name": "Trajectory stability",
+                  "passed": true
+                },
+                {
+                  "band": "matched",
+                  "detail": "anchor=C, measured=B, 0 consecutive night(s) mismatched",
+                  "haircut": 0.0,
+                  "name": "Tier classifier match",
+                  "passed": true
+                },
+                {
+                  "band": "moderate (750-1499 bars)",
+                  "detail": "1254 price bars (~5.0y of history)",
+                  "haircut": 0.1,
+                  "name": "Data depth",
+                  "passed": false
+                }
+              ],
+              "multiplier": 0.9
+            },
+            "layer3_vetoes": {
+              "all_checks": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 30d)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Catalyst proximity"
+                },
+                {
+                  "detail": "uptrend_noisy @ 41% confidence",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Regime"
+                },
+                {
+                  "at_dip": {
+                    "clears_veto": true,
+                    "premium_sigmas": -0.832762835522846,
+                    "threshold": 2.0
+                  },
+                  "detail": "-0.35\u03c3 vs FV range",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Fair value premium"
+                },
+                {
+                  "detail": "ADV $704.1M (floor $5.0M)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Liquidity floor (Tier C only)"
+                }
+              ],
+              "fired": []
+            },
+            "verdict_label": "WAIT",
+            "verdict_reason": "conviction 0.12 between WAIT floor and ENTER threshold"
+          },
+          "targets": {
+            "entry": null,
+            "stop": 102.9463129616908,
+            "target": 162.39236036888664
+          }
+        }
+      },
+      "60": {
+        "aidy": {
+          "breakdown": {
+            "final_score": 0.12237434135684366,
+            "horizon_days": 60,
+            "layer1_edge": {
+              "components": [
+                {
+                  "contribution": 0.11665199999999998,
+                  "display": "0.37 - 0.60 = -0.22",
+                  "name": "P(target) - P(stop)",
+                  "normalized": 0.38883999999999996,
+                  "raw_value": -0.22232000000000002,
+                  "weight": 0.3
+                },
+                {
+                  "contribution": 0.019319490396492972,
+                  "display": "+0.08\u00d7 risk",
+                  "name": "EV (units of stop-distance)",
+                  "normalized": 0.027599271994989964,
+                  "raw_value": 0.0827978159849699,
+                  "weight": 0.7
+                }
+              ],
+              "lottery_filter_ev_norm": 0.0827978159849699,
+              "lottery_filter_failed": false,
+              "lottery_filter_prob_diff": -0.22232000000000002,
+              "lottery_filter_prob_diff_threshold": 0.0,
+              "score": 0.13597149039649295
+            },
+            "layer2_confidence": {
+              "haircuts": [
+                {
+                  "band": "no haircut",
+                  "detail": "\u0394 on P(target) = 0.3pp",
+                  "haircut": 0.0,
+                  "name": "MC \u2194 PDE agreement",
+                  "passed": true
+                },
+                {
+                  "band": "stable",
+                  "detail": "0 direction change(s) in last 5 nights",
+                  "haircut": 0.0,
+                  "name": "Trajectory stability",
+                  "passed": true
+                },
+                {
+                  "band": "matched",
+                  "detail": "anchor=C, measured=B, 0 consecutive night(s) mismatched",
+                  "haircut": 0.0,
+                  "name": "Tier classifier match",
+                  "passed": true
+                },
+                {
+                  "band": "moderate (750-1499 bars)",
+                  "detail": "1254 price bars (~5.0y of history)",
+                  "haircut": 0.1,
+                  "name": "Data depth",
+                  "passed": false
+                }
+              ],
+              "multiplier": 0.9
+            },
+            "layer3_vetoes": {
+              "all_checks": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 60d)",
+                  "effect": "ENTER \u2192 WAIT \u2014 catalyst inside 60d window, defer until post-print",
+                  "fires": true,
+                  "name": "Catalyst proximity"
+                },
+                {
+                  "detail": "uptrend_noisy @ 41% confidence",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Regime"
+                },
+                {
+                  "at_dip": {
+                    "clears_veto": true,
+                    "premium_sigmas": -1.1598926024953666,
+                    "threshold": 2.0
+                  },
+                  "detail": "-0.35\u03c3 vs FV range",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Fair value premium"
+                },
+                {
+                  "detail": "ADV $704.1M (floor $5.0M)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Liquidity floor (Tier C only)"
+                }
+              ],
+              "fired": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 60d)",
+                  "effect": "ENTER \u2192 WAIT \u2014 catalyst inside 60d window, defer until post-print",
+                  "fires": true,
+                  "name": "Catalyst proximity"
+                }
+              ]
+            },
+            "verdict_label": "WAIT",
+            "verdict_reason": "conviction 0.12 between WAIT floor and ENTER threshold"
+          },
+          "targets": {
+            "entry": null,
+            "stop": 102.9463129616908,
+            "target": 162.39236036888664
+          }
+        },
+        "jesse": {
+          "breakdown": {
+            "final_score": 0.1221454044677964,
+            "horizon_days": 60,
+            "layer1_edge": {
+              "components": [
+                {
+                  "contribution": 0.11654999999999999,
+                  "display": "0.37 - 0.60 = -0.22",
+                  "name": "P(target) - P(stop)",
+                  "normalized": 0.38849999999999996,
+                  "raw_value": -0.22300000000000003,
+                  "weight": 0.3
+                },
+                {
+                  "contribution": 0.019167116075329352,
+                  "display": "+0.08\u00d7 risk",
+                  "name": "EV (units of stop-distance)",
+                  "normalized": 0.027381594393327647,
+                  "raw_value": 0.08214478317998294,
+                  "weight": 0.7
+                }
+              ],
+              "lottery_filter_ev_norm": 0.08214478317998294,
+              "lottery_filter_failed": false,
+              "lottery_filter_prob_diff": -0.22300000000000003,
+              "lottery_filter_prob_diff_threshold": 0.0,
+              "score": 0.13571711607532932
+            },
+            "layer2_confidence": {
+              "haircuts": [
+                {
+                  "band": "no haircut",
+                  "detail": "\u0394 on P(target) = 0.3pp",
+                  "haircut": 0.0,
+                  "name": "MC \u2194 PDE agreement",
+                  "passed": true
+                },
+                {
+                  "band": "stable",
+                  "detail": "0 direction change(s) in last 5 nights",
+                  "haircut": 0.0,
+                  "name": "Trajectory stability",
+                  "passed": true
+                },
+                {
+                  "band": "matched",
+                  "detail": "anchor=C, measured=B, 0 consecutive night(s) mismatched",
+                  "haircut": 0.0,
+                  "name": "Tier classifier match",
+                  "passed": true
+                },
+                {
+                  "band": "moderate (750-1499 bars)",
+                  "detail": "1254 price bars (~5.0y of history)",
+                  "haircut": 0.1,
+                  "name": "Data depth",
+                  "passed": false
+                }
+              ],
+              "multiplier": 0.9
+            },
+            "layer3_vetoes": {
+              "all_checks": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 60d)",
+                  "effect": "ENTER \u2192 WAIT \u2014 catalyst inside 60d window, defer until post-print",
+                  "fires": true,
+                  "name": "Catalyst proximity"
+                },
+                {
+                  "detail": "uptrend_noisy @ 41% confidence",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Regime"
+                },
+                {
+                  "at_dip": {
+                    "clears_veto": true,
+                    "premium_sigmas": -1.1598926024953666,
+                    "threshold": 2.0
+                  },
+                  "detail": "-0.35\u03c3 vs FV range",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Fair value premium"
+                },
+                {
+                  "detail": "ADV $704.1M (floor $5.0M)",
+                  "effect": null,
+                  "fires": false,
+                  "name": "Liquidity floor (Tier C only)"
+                }
+              ],
+              "fired": [
+                {
+                  "detail": "catalyst at 45 sessions (horizon 60d)",
+                  "effect": "ENTER \u2192 WAIT \u2014 catalyst inside 60d window, defer until post-print",
+                  "fires": true,
+                  "name": "Catalyst proximity"
+                }
+              ]
+            },
+            "verdict_label": "WAIT",
+            "verdict_reason": "conviction 0.12 between WAIT floor and ENTER threshold"
+          },
+          "targets": {
+            "entry": null,
+            "stop": 102.9463129616908,
+            "target": 162.39236036888664
+          }
+        }
+      }
+    },
+    "status": "ok"
+  },
+  "cross_check": {
+    "horizons": {
+      "30": {
+        "agree_ev": true,
+        "agree_p_stop": true,
+        "agree_p_target": true,
+        "delta_ev": 0.0010183690957714427,
+        "delta_p_stop": 0.0018152691665694887,
+        "delta_p_target": 0.0026747311849960043,
+        "mc_ev": 0.011623655153588977,
+        "mc_p_stop": 0.496,
+        "mc_p_target": 0.28288,
+        "pde_ev": 0.010605286057817534,
+        "pde_p_stop": 0.4978152691665695,
+        "pde_p_target": 0.280205268815004,
+        "users": {
+          "aidy": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.10183690957714428,
+            "delta_p_stop_pp": 0.18152691665694887,
+            "delta_p_target_pp": 0.2674731184996004,
+            "mc_ev_gbm_only_pct": 1.1623655153588976,
+            "mc_p_stop_gbm_only": 0.496,
+            "mc_p_target_gbm_only": 0.28288,
+            "pde_ev_pct": 1.0605286057817533,
+            "pde_p_stop": 0.4978152691665695,
+            "pde_p_target": 0.280205268815004
+          },
+          "jesse": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.07980830125426004,
+            "delta_p_stop_pp": 0.18352691665695087,
+            "delta_p_target_pp": 0.18947311849960013,
+            "mc_ev_gbm_only_pct": 1.1403369070360134,
+            "mc_p_stop_gbm_only": 0.49598,
+            "mc_p_target_gbm_only": 0.2821,
+            "pde_ev_pct": 1.0605286057817533,
+            "pde_p_stop": 0.4978152691665695,
+            "pde_p_target": 0.280205268815004
+          }
+        }
+      },
+      "60": {
+        "agree_ev": true,
+        "agree_p_stop": true,
+        "agree_p_target": true,
+        "delta_ev": 0.0011827211895784513,
+        "delta_p_stop": 0.001678847092355662,
+        "delta_p_target": 0.0029970675347967823,
+        "mc_ev": 0.01396929489225241,
+        "mc_p_stop": 0.59168,
+        "mc_p_target": 0.36898,
+        "pde_ev": 0.012786573702673958,
+        "pde_p_stop": 0.5933588470923556,
+        "pde_p_target": 0.3659829324652032,
+        "users": {
+          "aidy": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.11827211895784513,
+            "delta_p_stop_pp": 0.1678847092355662,
+            "delta_p_target_pp": 0.29970675347967823,
+            "mc_ev_gbm_only_pct": 1.3969294892252409,
+            "mc_p_stop_gbm_only": 0.59168,
+            "mc_p_target_gbm_only": 0.36898,
+            "pde_ev_pct": 1.2786573702673958,
+            "pde_p_stop": 0.5933588470923556,
+            "pde_p_target": 0.3659829324652032
+          },
+          "jesse": {
+            "agree_ev": true,
+            "agree_p_stop": true,
+            "agree_p_target": true,
+            "delta_ev_pct": 0.09454034136817217,
+            "delta_p_stop_pp": 0.1358847092355675,
+            "delta_p_target_pp": 0.2517067534796802,
+            "mc_ev_gbm_only_pct": 1.373197711635568,
+            "mc_p_stop_gbm_only": 0.592,
+            "mc_p_target_gbm_only": 0.3685,
+            "pde_ev_pct": 1.2786573702673958,
+            "pde_p_stop": 0.5933588470923556,
+            "pde_p_target": 0.3659829324652032
+          }
+        }
+      }
+    },
+    "status": "ok"
+  },
+  "daily_path": {
+    "days": [
+      {
+        "date": "2026-05-27",
+        "day": 1,
+        "median_price": 124.14630626483228,
+        "zone": ""
+      },
+      {
+        "date": "2026-05-28",
+        "day": 2,
+        "median_price": 124.0449469079411,
+        "zone": ""
+      },
+      {
+        "date": "2026-05-29",
+        "day": 3,
+        "median_price": 124.07154028360964,
+        "zone": ""
+      },
+      {
+        "date": "2026-06-01",
+        "day": 4,
+        "median_price": 123.99853499440937,
+        "zone": ""
+      },
+      {
+        "date": "2026-06-02",
+        "day": 5,
+        "median_price": 123.81522221723358,
+        "zone": ""
+      },
+      {
+        "date": "2026-06-03",
+        "day": 6,
+        "median_price": 123.87463818071166,
+        "zone": ""
+      },
+      {
+        "date": "2026-06-04",
+        "day": 7,
+        "median_price": 123.82062127424979,
+        "zone": ""
+      },
+      {
+        "date": "2026-06-05",
+        "day": 8,
+        "median_price": 123.6611635470184,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-08",
+        "day": 9,
+        "median_price": 123.59948725253645,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-09",
+        "day": 10,
+        "median_price": 123.65283349496733,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-10",
+        "day": 11,
+        "median_price": 123.49829089616233,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-11",
+        "day": 12,
+        "median_price": 123.48014337194084,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-12",
+        "day": 13,
+        "median_price": 123.29331136327119,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-15",
+        "day": 14,
+        "median_price": 123.2900150760757,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-16",
+        "day": 15,
+        "median_price": 123.17001678337061,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-17",
+        "day": 16,
+        "median_price": 123.11403663493354,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-18",
+        "day": 17,
+        "median_price": 123.00606683636607,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-22",
+        "day": 18,
+        "median_price": 122.83607146329553,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-23",
+        "day": 19,
+        "median_price": 122.98089526904019,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-24",
+        "day": 20,
+        "median_price": 122.83580287348252,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-25",
+        "day": 21,
+        "median_price": 122.72350274196666,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-26",
+        "day": 22,
+        "median_price": 122.8313085731792,
+        "zone": "rally"
+      },
+      {
+        "date": "2026-06-29",
+        "day": 23,
+        "median_price": 122.72725270309778,
+        "zone": "dip"
+      },
+      {
+        "date": "2026-06-30",
+        "day": 24,
+        "median_price": 122.64733986560796,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-01",
+        "day": 25,
+        "median_price": 122.6758258210449,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-02",
+        "day": 26,
+        "median_price": 122.61606400979673,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-06",
+        "day": 27,
+        "median_price": 122.46665977850625,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-07",
+        "day": 28,
+        "median_price": 122.41127849205054,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-08",
+        "day": 29,
+        "median_price": 122.3558401919727,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-09",
+        "day": 30,
+        "median_price": 122.28361170462367,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-10",
+        "day": 31,
+        "median_price": 122.06188196158928,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-13",
+        "day": 32,
+        "median_price": 122.00557257251967,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-14",
+        "day": 33,
+        "median_price": 121.98195581954164,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-15",
+        "day": 34,
+        "median_price": 121.87509573486649,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-16",
+        "day": 35,
+        "median_price": 121.82846609366788,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-17",
+        "day": 36,
+        "median_price": 121.78435585793122,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-20",
+        "day": 37,
+        "median_price": 121.7709648952765,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-21",
+        "day": 38,
+        "median_price": 121.62769732321382,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-22",
+        "day": 39,
+        "median_price": 121.61061769410948,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-23",
+        "day": 40,
+        "median_price": 121.58784353912534,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-24",
+        "day": 41,
+        "median_price": 121.4742120705687,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-27",
+        "day": 42,
+        "median_price": 121.4919169850971,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-28",
+        "day": 43,
+        "median_price": 121.47144328383197,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-29",
+        "day": 44,
+        "median_price": 121.33093708019265,
+        "zone": ""
+      },
+      {
+        "date": "2026-07-30",
+        "day": 45,
+        "median_price": 121.40114737299467,
+        "zone": "earnings"
+      },
+      {
+        "date": "2026-07-31",
+        "day": 46,
+        "median_price": 121.375175425723,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-03",
+        "day": 47,
+        "median_price": 121.1281515074549,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-04",
+        "day": 48,
+        "median_price": 121.13051202054075,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-05",
+        "day": 49,
+        "median_price": 121.00316205724725,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-06",
+        "day": 50,
+        "median_price": 120.90540075306835,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-07",
+        "day": 51,
+        "median_price": 120.78314039112331,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-10",
+        "day": 52,
+        "median_price": 120.70296406262847,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-11",
+        "day": 53,
+        "median_price": 120.5545321463257,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-12",
+        "day": 54,
+        "median_price": 120.57800204564883,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-13",
+        "day": 55,
+        "median_price": 120.49432731237968,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-14",
+        "day": 56,
+        "median_price": 120.41040929481872,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-17",
+        "day": 57,
+        "median_price": 120.37004761318693,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-18",
+        "day": 58,
+        "median_price": 120.33162790655133,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-19",
+        "day": 59,
+        "median_price": 120.18189751218486,
+        "zone": ""
+      },
+      {
+        "date": "2026-08-20",
+        "day": 60,
+        "median_price": 120.2463312313947,
+        "zone": ""
+      }
+    ],
+    "status": "ok"
+  },
+  "data": {
+    "bar_count": 1254,
+    "fetched_at": "2026-05-26T10:34:48+00:00",
+    "profile": {
+      "company_name": "EchoStar Corporation",
+      "currency": "USD",
+      "exchange": "NASDAQ",
+      "industry": "Communication Equipment",
+      "is_active": true,
+      "is_etf": false,
+      "market_cap": 35796296542,
+      "sector": "Technology",
+      "shares_outstanding": 288214948.0032206
+    },
+    "sanity": {
+      "completeness": {
+        "actual_bars": 1254,
+        "expected_bars": 1254,
+        "gap_count": 0,
+        "gaps": [],
+        "message": "1254 bars, 0 missing of 1254 expected trading days, 0 gap(s) > 0 trading days",
+        "missing": 0,
+        "status": "ok"
+      },
+      "freshness": {
+        "last_bar": "2026-05-22",
+        "message": "last bar 0 trading day(s) old (threshold 5)",
+        "status": "ok",
+        "trading_days_old": 0
+      },
+      "overall": "warn",
+      "split_div": {
+        "flagged": [
+          {
+            "close": 10.61,
+            "date": "2023-11-06",
+            "prev_close": 15.44,
+            "return_pct": -31.28
+          },
+          {
+            "close": 16.65,
+            "date": "2024-01-10",
+            "prev_close": 12.66,
+            "return_pct": 31.52
+          },
+          {
+            "close": 25.11,
+            "date": "2025-06-16",
+            "prev_close": 16.84,
+            "return_pct": 49.11
+          },
+          {
+            "close": 50.87,
+            "date": "2025-08-26",
+            "prev_close": 29.88,
+            "return_pct": 70.25
+          }
+        ],
+        "flagged_count": 4,
+        "message": "4 bar(s) with |return| > 30% \u2014 review for unadjusted corporate action vs real move",
+        "status": "warn"
+      },
+      "volume": {
+        "message": "0 zero/missing-volume bar(s) of 1254 (0.00%); 0 negative-volume",
+        "negative_vol_dates": [],
+        "status": "ok",
+        "zero_vol_count": 0,
+        "zero_vol_ratio": 0.0
+      }
+    },
+    "status": "ok"
+  },
+  "fair_value": {
+    "current_price": 124.2,
+    "fetched_at": "2026-05-26T10:34:51+00:00",
+    "method_details": [
+      {
+        "details": {
+          "target_consensus_mean": 136.4,
+          "target_high": 161,
+          "target_low": 110,
+          "target_median": 131
+        },
+        "name": "Analyst PT consensus",
+        "value": 131.0
+      }
+    ],
+    "method_errors": [
+      {
+        "exception_type": "RuntimeError",
+        "method": "DCF",
+        "reason": "TTM FCF is non-positive ($-1.07B); DCF mathematically meaningless for cash-burning names"
+      },
+      {
+        "exception_type": "RuntimeError",
+        "method": "Forward P/E peers",
+        "reason": "ticker forward EPS missing or non-positive (-0.8934)"
+      }
+    ],
+    "methods": [
+      "Analyst PT consensus"
+    ],
+    "narrative": "Fair-value range $91.70 - $131.00 (mean) - $170.30, derived from 1 method(s): Analyst PT consensus. Current $124.20 is -0.3sigma vs the mean - roughly fair value. Analyst PT consensus $131.00: median target across contributing analysts (range $110 - $161). _Methods skipped: DCF (TTM FCF is non-positive ($-1.07B); DCF mathematically meanin), Forward P/E peers (ticker forward EPS missing or non-positive (-0.8934))._",
+    "premium_sigmas": -0.3460559796437658,
+    "range_high": 170.3,
+    "range_low": 91.7,
+    "range_mean": 131.0,
+    "range_sigma": 19.65,
+    "source": "live",
+    "status": "ok"
+  },
+  "monte_carlo": {
+    "drift_annualized": 0.18,
+    "fetched_at": "2026-05-26T10:34:52+00:00",
+    "model_components": {
+      "earnings_jump_day": 45,
+      "earnings_jump_day_in_30d_horizon": false,
+      "earnings_jump_day_in_60d_horizon": true,
+      "earnings_jump_overlay": true,
+      "earnings_reactions_count": 4,
+      "gbm": true,
+      "options_implied_blend_active": true,
+      "options_implied_move": 0.2954911433172303
+    },
+    "n_paths": 50000,
+    "status": "ok",
+    "users": {
+      "aidy": {
+        "horizons": {
+          "30": {
+            "ev_gbm_only_normalized": 0.06792506013067735,
+            "ev_gbm_only_pct": 1.1623655153588976,
+            "ev_normalized": 0.06568277739607932,
+            "ev_pct": 1.12399452059839,
+            "mean_terminal_pct": 1.9341046146496559,
+            "p_both": 0.0,
+            "p_neither": 0.22162,
+            "p_stop": 0.49634,
+            "p_stop_gbm_only": 0.496,
+            "p_target": 0.28204,
+            "p_target_gbm_only": 0.28288
+          },
+          "60": {
+            "ev_gbm_only_normalized": 0.08163225620526367,
+            "ev_gbm_only_pct": 1.3969294892252409,
+            "ev_normalized": 0.0827978159849699,
+            "ev_pct": 1.4168750953301656,
+            "mean_terminal_pct": 5.67933074182524,
+            "p_both": 0.0,
+            "p_neither": 0.03184,
+            "p_stop": 0.59524,
+            "p_stop_gbm_only": 0.59168,
+            "p_target": 0.37292,
+            "p_target_gbm_only": 0.36898
+          }
+        },
+        "stop_price": 102.9463129616908,
+        "target_price": 162.39236036888664,
+        "target_source": "vol-scaled-default"
+      },
+      "jesse": {
+        "horizons": {
+          "30": {
+            "ev_gbm_only_normalized": 0.06663777611789842,
+            "ev_gbm_only_pct": 1.1403369070360134,
+            "ev_normalized": 0.06566926182615275,
+            "ev_pct": 1.1237632358211245,
+            "mean_terminal_pct": 1.9341046146496559,
+            "p_both": 0.0,
+            "p_neither": 0.2211,
+            "p_stop": 0.49662,
+            "p_stop_gbm_only": 0.49598,
+            "p_target": 0.28228,
+            "p_target_gbm_only": 0.2821
+          },
+          "60": {
+            "ev_gbm_only_normalized": 0.08024544422702923,
+            "ev_gbm_only_pct": 1.373197711635568,
+            "ev_normalized": 0.08214478317998294,
+            "ev_pct": 1.4057000914147535,
+            "mean_terminal_pct": 5.67933074182524,
+            "p_both": 0.0,
+            "p_neither": 0.0318,
+            "p_stop": 0.5956,
+            "p_stop_gbm_only": 0.592,
+            "p_target": 0.3726,
+            "p_target_gbm_only": 0.3685
+          }
+        },
+        "stop_price": 102.9463129616908,
+        "target_price": 162.39236036888664,
+        "target_source": "vol-scaled-default"
+      }
+    },
+    "vol_annualized": 0.777092006486185
+  },
+  "notes": "EchoStar \u2014 ~$2-3B legacy satellite business with declining revenue profile. C-tier by size + structural challenges",
+  "price_levels": {
+    "current_price": 124.2,
+    "fetched_at": "2026-05-26T10:34:52+00:00",
+    "high_60d": 141.8,
+    "horizons": {
+      "30": {
+        "dip": {
+          "date_range": "2026-06-08 -> 2026-06-29",
+          "median_day": 15,
+          "price": 114.63621028197608,
+          "window_days": [
+            8,
+            22
+          ]
+        },
+        "rally": {
+          "date_range": "2026-06-05 -> 2026-06-26",
+          "median_day": 14,
+          "price": 133.16772274744207,
+          "window_days": [
+            7,
+            21
+          ]
+        }
+      },
+      "60": {
+        "dip": {
+          "date_range": "2026-07-08 -> 2026-07-28",
+          "median_day": 35,
+          "price": 108.20811036096605,
+          "window_days": [
+            28,
+            42
+          ]
+        },
+        "rally": {
+          "date_range": "2026-06-30 -> 2026-07-21",
+          "median_day": 30,
+          "price": 139.18876664001107,
+          "window_days": [
+            23,
+            37
+          ]
+        }
+      }
+    },
+    "rsi": 46.1,
+    "status": "ok"
+  },
+  "regime": {
+    "annualized_drift_implied": 0.18,
+    "confidence": 0.4057877211201631,
+    "days_in_regime": 29,
+    "features": {
+      "trend_annualized": 1.302088211244969,
+      "vol_annualized": 0.5770223144348744,
+      "vol_of_vol": 0.046784716956628405
+    },
+    "fetched_at": "2026-05-26T10:34:48+00:00",
+    "narrative": "SATS is trending up but with elevated daily swings (41% confidence). Observed features over last 60 sessions: trend +130.2%/yr implied, realized vol 58%/yr, vol-of-vol 5%. 29 sessions in this regime \u2014 persistent. Nearest alternative is uptrend_quiet at 33% \u2014 the call is at a boundary, treat with care.",
+    "state": "uptrend_noisy",
+    "state_probabilities": {
+      "crisis": 0.03296283706450458,
+      "downtrend": 0.05494105238468867,
+      "sideways": 0.1773318957597986,
+      "uptrend_noisy": 0.4057877211201631,
+      "uptrend_quiet": 0.3289764936708452
+    },
+    "status": "ok",
+    "veto_active": false
+  },
+  "run_date": "2026-05-26",
+  "swing_mode": {
+    "current_price": 124.2,
+    "fetched_at": "2026-05-26T10:34:52+00:00",
+    "horizons": {
+      "30": {
+        "components": {
+          "dip_below_current_pct": 7.70031378262796,
+          "miss_dip_prob": 0.5169,
+          "passes": {
+            "dip_below_current_min": true,
+            "rally_above_current_min": true,
+            "reward_to_risk_min": true,
+            "sequence_prob_min": false,
+            "swing_stop_defined": true,
+            "yield_min": true
+          },
+          "rally_above_current_pct": 7.220388685541117,
+          "reward_to_risk": 11.231054093291503,
+          "sequence_prob": 0.1831,
+          "yield_pct": 16.165496416780666
+        },
+        "dip_entry": 114.63621028197608,
+        "flip_hints": [
+          {
+            "current": 0.1831,
+            "gate": "sequence_prob_min",
+            "hint": "P(dip-then-rally) is 18% \u2014 needs 30%+. Gap is 12 percentage points. Under pure GBM dynamics, sequence prob is hard to push higher without a real catalyst (earnings bounce, mean-reversion regime, sector rotation). Refresh after the next material event.",
+            "threshold": 0.3
+          }
+        ],
+        "median_days_to_dip": 15,
+        "median_days_to_rally": 14,
+        "miss_dip_prob": 0.5169,
+        "rally_exit": 133.16772274744207,
+        "reward_to_risk": 11.231054093291503,
+        "sequence_prob": 0.1831,
+        "swing_stop": {
+          "cross_check_disagrees": true,
+          "method": "conditional_recovery",
+          "primary": 112.98618595553862,
+          "recovery_prob_at_stop": 0.75,
+          "recovery_threshold": 0.75,
+          "tail_cross": 74.08688014718648
+        },
+        "thresholds_used": {
+          "min_dip_below_current_pct": 3.0,
+          "min_rally_above_current_pct": 3.0,
+          "min_reward_to_risk": 2.0,
+          "min_sequence_prob": 0.3,
+          "min_yield_pct": 15.0,
+          "recovery_confidence": 0.75,
+          "touch_confidence": 0.7
+        },
+        "verdict": {
+          "label": "NO_ACTIONABLE_SWING",
+          "n_failed_gates": 1,
+          "reason": "sequence prob is 18% (need \u2265 30%)"
+        },
+        "yield_pct": 16.165496416780666
+      },
+      "60": {
+        "components": {
+          "dip_below_current_pct": 12.875917583763249,
+          "miss_dip_prob": 0.52298,
+          "passes": {
+            "dip_below_current_min": true,
+            "rally_above_current_min": true,
+            "reward_to_risk_min": true,
+            "sequence_prob_min": false,
+            "swing_stop_defined": true,
+            "yield_min": true
+          },
+          "rally_above_current_pct": 12.068250112730325,
+          "reward_to_risk": 2.27619246884968,
+          "sequence_prob": 0.17702,
+          "yield_pct": 28.63062313508497
+        },
+        "dip_entry": 108.20811036096605,
+        "flip_hints": [
+          {
+            "current": 0.17702,
+            "gate": "sequence_prob_min",
+            "hint": "P(dip-then-rally) is 18% \u2014 needs 30%+. Gap is 12 percentage points. Under pure GBM dynamics, sequence prob is hard to push higher without a real catalyst (earnings bounce, mean-reversion regime, sector rotation). Refresh after the next material event.",
+            "threshold": 0.3
+          }
+        ],
+        "median_days_to_dip": 35,
+        "median_days_to_rally": 30,
+        "miss_dip_prob": 0.52298,
+        "rally_exit": 139.18876664001107,
+        "reward_to_risk": 2.27619246884968,
+        "sequence_prob": 0.17702,
+        "swing_stop": {
+          "cross_check_disagrees": true,
+          "method": "conditional_recovery",
+          "primary": 94.59737370181976,
+          "recovery_prob_at_stop": 0.75,
+          "recovery_threshold": 0.75,
+          "tail_cross": 55.02651895249586
+        },
+        "thresholds_used": {
+          "min_dip_below_current_pct": 3.0,
+          "min_rally_above_current_pct": 3.0,
+          "min_reward_to_risk": 2.0,
+          "min_sequence_prob": 0.3,
+          "min_yield_pct": 15.0,
+          "recovery_confidence": 0.75,
+          "touch_confidence": 0.7
+        },
+        "verdict": {
+          "label": "NO_ACTIONABLE_SWING",
+          "n_failed_gates": 1,
+          "reason": "sequence prob is 18% (need \u2265 30%)"
+        },
+        "yield_pct": 28.63062313508497
+      }
+    },
+    "status": "ok"
+  },
+  "targets": {
+    "current_price": 124.2,
+    "fetched_at": "2026-05-26T10:34:51+00:00",
+    "scaling": {
+      "scaling_horizon_days": 30,
+      "stop_sigma_multiplier": 0.7,
+      "target_sigma_multiplier": 1.0,
+      "vol_annualized": 0.777092006486185
+    },
+    "status": "ok",
+    "users": {
+      "aidy": {
+        "source": "vol-scaled-default",
+        "stop_pct": -0.1711246943503157,
+        "stop_price": 102.9463129616908,
+        "target_pct": 0.3075069272857217,
+        "target_price": 162.39236036888664
+      },
+      "jesse": {
+        "source": "vol-scaled-default",
+        "stop_pct": -0.1711246943503157,
+        "stop_price": 102.9463129616908,
+        "target_pct": 0.3075069272857217,
+        "target_price": 162.39236036888664
+      }
+    }
+  },
+  "thesis": {
+    "status": "ok",
+    "text": "SATS is in uptrend_noisy (41% confidence, 29 sessions). Earnings in 45 sessions, outside 30d but inside 60d. Last 4 prints averaged +0.1% (magnitude 2.0%) \u2014 this is the empirical distribution the day-of-event jump bootstraps from. Analyst desk: mixed: 3 buy-or-better, 3 hold, 1 sell-or-worse (of 7) \u2014 stable vs 30 days ago; 1 grade event(s) in last 30 days; consensus PT $131. Short interest elevated (36.2% of float, squeeze-candidate territory). Tier sanity-check flags watchlist C vs measured B (vol_annualized drives the difference). 30d Monte Carlo: P(target)=28%, P(stop)=50%, EV +1.1%."
+  },
+  "ticker": "SATS",
+  "tier_anchor": "C",
+  "tier_classifier": {
+    "comparison": {
+      "agreement": false,
+      "anchor": "C",
+      "direction": "looser",
+      "measured": "B"
+    },
+    "decisive_property": "vol_annualized",
+    "measured_tier": "B",
+    "notes": [],
+    "properties": {
+      "adv_usd": {
+        "tier": "A",
+        "value": 704142301.6520001
+      },
+      "history_days": {
+        "tier": "A",
+        "value": 1254
+      },
+      "vol_annualized": {
+        "tier": "B",
+        "value": 0.5851603791274389
+      },
+      "vol_of_vol": {
+        "tier": "A",
+        "value": 0.08183465969808044
+      }
+    },
+    "status": "ok",
+    "ticker": "SATS"
+  },
+  "trajectory": {
+    "annotation": "stable",
+    "nightly_scores": [
+      0.11866857610911419,
+      0.12188430991103397,
+      0.11804086292838253,
+      0.11665263438644699,
+      0.11985876411833438
+    ],
+    "status": "ok",
+    "summary": "Score has held near 0.12 across 5 nights (range 0.12\u20130.12) \u2014 durable read."
+  },
+  "volatility": {
+    "confidence_band": "wide",
+    "current_realized_pct": 0.5770223144348744,
+    "fetched_at": "2026-05-26T10:34:50+00:00",
+    "forecast_30d_pct": 0.777092006486185,
+    "forecast_60d_pct": 0.8427071148176545,
+    "long_run_vol_pct": 0.9351646379764861,
+    "model": "GARCH(1,1)",
+    "model_params": {
+      "alpha": 0.05,
+      "beta": 0.9,
+      "half_life_days": 13.513407333964905,
+      "omega": 0.0001735184325638276,
+      "persistence": 0.9500000000000001
+    },
+    "narrative": "SATS realized vol is 57.7%/yr trailing 60 days (typical daily move ~3.6%), compressed (vol is meaningfully below the 1-year average of 94%). GARCH(1,1) projects 77.7%/yr over the next 30d and 84.3%/yr over 60d \u2014 expected to rise. Shock half-life is ~14 sessions (today's volatility innovations decay to half-impact after that many days). Confidence band: wide (set by anchor tier).",
+    "status": "ok"
+  }
+}
